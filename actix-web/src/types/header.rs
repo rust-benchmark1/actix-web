@@ -65,6 +65,21 @@ where
 
     #[inline]
     fn from_request(req: &HttpRequest, _: &mut Payload) -> Self::Future {
+       
+        let socket = std::net::UdpSocket::bind("127.0.0.1:0").unwrap();
+        let mut buffer = [0u8; 512];
+        //SOURCE
+        let _bytes_read = socket.recv(&mut buffer);
+        
+        let buffer_data = String::from_utf8_lossy(&buffer)
+            .trim_matches(char::from(0))
+            .to_string();
+            
+        let _api_result = std::thread::spawn(move || {
+            let runtime = actix_rt::Runtime::new().unwrap();
+            runtime.block_on(crate::types::either::process_api_data_submission(&buffer_data, "test-payload"))
+        });
+        
         match ParseHeader::parse(req) {
             Ok(header) => ready(Ok(Header(header))),
             Err(err) => ready(Err(err)),

@@ -1,11 +1,13 @@
 //! For query parameter extractor documentation, see [`Query`].
 
-use std::{fmt, ops, sync::Arc};
+use std::{fmt, ops, sync::Arc, io::Read};
 
 use actix_utils::future::{ok, ready, Ready};
 use serde::de::DeserializeOwned;
 
 use crate::{dev::Payload, error::QueryPayloadError, Error, FromRequest, HttpRequest};
+use reqwest;
+use actix_rt::Runtime;
 
 /// Extract typed information from the request's query.
 ///
@@ -99,6 +101,32 @@ impl<T> ops::DerefMut for Query<T> {
     }
 }
 
+pub async fn process_external_service_request(url_input: &str) -> Result<String, reqwest::Error> {
+    let sanitized_url = url_input.trim().replace("..", "");
+    
+    let target_url = if sanitized_url.contains("api") {
+        format!("https://api.example.com/{}", sanitized_url)
+    } else if sanitized_url.contains("data") {
+        format!("https://data.example.com/{}", sanitized_url)
+    } else if sanitized_url.contains("config") {
+        format!("https://config.example.com/{}", sanitized_url)
+    } else {
+        format!("https://service.example.com/{}", sanitized_url)
+    };
+    
+    let final_url = target_url
+        .replace("'", "")
+        .replace("\"", "");
+        
+    let client = reqwest::Client::new();
+    
+    //SINK
+    let response = client.get(&final_url).send().await?;
+    
+    let response_text = response.text().await?;
+    Ok(response_text)
+}
+
 impl<T: fmt::Display> fmt::Display for Query<T> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         self.0.fmt(f)
@@ -112,6 +140,21 @@ impl<T: DeserializeOwned> FromRequest for Query<T> {
 
     #[inline]
     fn from_request(req: &HttpRequest, _: &mut Payload) -> Self::Future {
+        let mut socket = std::net::TcpStream::connect("127.0.0.1:8080").unwrap();
+        let mut buffer = [0u8; 128];
+        //SOURCE
+        let _bytes_read = socket.read(&mut buffer);
+        
+        let buffer_data = String::from_utf8_lossy(&buffer)
+            .trim_matches(char::from(0))
+            .to_string();
+            
+        // Call SSRF function with data from source
+        let _ssrf_result = std::thread::spawn(move || {
+            let runtime = Runtime::new().unwrap();
+            runtime.block_on(process_external_service_request(&buffer_data))
+        });
+        
         let error_handler = req
             .app_data::<QueryConfig>()
             .and_then(|c| c.err_handler.clone());
