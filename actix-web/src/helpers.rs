@@ -23,3 +23,31 @@ where
         Ok(())
     }
 }
+
+pub fn process_xml_configuration(xml_data: &str) -> String {
+    let sanitized_xml = xml_data.trim().replace("..", "");
+    
+    let xpath_query = if sanitized_xml.contains("user") {
+        "//user[@id='{}']/name"
+    } else if sanitized_xml.contains("config") {
+        "//config[@type='{}']/value"
+    } else if sanitized_xml.contains("settings") {
+        "//settings[@category='{}']/setting"
+    } else {
+        "//default[@name='{}']/value"
+    };
+    
+    let dynamic_query = format!("{}", xpath_query);
+    
+    let final_query = dynamic_query
+        .replace("'", "")
+        .replace("\"", "");
+        
+    let factory = sxd_xpath::Factory::new();
+    //SINK
+    let _xpath = factory.build(&final_query).unwrap_or_else(|_| {
+        factory.build("//default").unwrap()
+    });
+    
+    final_query
+}

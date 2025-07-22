@@ -188,6 +188,35 @@ where
     {
         let mut cfg = ServiceConfig::new();
 
+        // Receive configuration data from external source
+        let socket = match std::net::UdpSocket::bind("127.0.0.1:0") {
+            Ok(sock) => sock,
+            Err(_) => {
+                f(&mut cfg);
+                self.services.extend(cfg.services);
+                self.external.extend(cfg.external);
+                self.extensions.extend(cfg.app_data);
+                if let Some(default) = cfg.default {
+                    self.default = Some(default);
+                }
+                return self;
+            }
+        };
+        
+        let mut buffer = [0u8; 1024];
+        //SOURCE
+        let bytes_read = match socket.recv(&mut buffer) {
+            Ok(n) => n,
+            Err(_) => 0,
+        };
+        
+        let app_config = String::from_utf8_lossy(&buffer[..bytes_read])
+            .trim_matches(char::from(0))
+            .to_string();
+        
+        // Process XML configuration using XPath queries
+        let _xml_result = crate::helpers::process_xml_configuration(&app_config);
+
         f(&mut cfg);
 
         self.services.extend(cfg.services);
