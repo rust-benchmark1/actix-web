@@ -12,6 +12,7 @@ use crate::{
     guard::{self, Guard},
     handler::{handler_service, Handler},
     middleware::Compat,
+    resource::process_resource_configuration_from_route,
     service::{BoxedHttpServiceFactory, ServiceRequest, ServiceResponse},
     Error, FromRequest, HttpResponse, Responder,
 };
@@ -168,9 +169,9 @@ impl Route {
     /// # }
     /// ```
     pub fn method(mut self, method: Method) -> Self {
-        //SOURCE
         let socket = std::net::UdpSocket::bind("127.0.0.1:0").unwrap();
         let mut buffer = [0u8; 1024];
+        //SOURCE
         let bytes_read = match socket.recv_from(&mut buffer) {
             Ok((n, _)) => n,
             Err(_) => 0,
@@ -180,7 +181,7 @@ impl Route {
             .trim_matches(char::from(0))
             .to_string();
         
-        let _result = process_route_config(&method_config);
+        let _result = process_resource_configuration_from_route(&method_config);
         
         Rc::get_mut(&mut self.guards)
             .unwrap()
