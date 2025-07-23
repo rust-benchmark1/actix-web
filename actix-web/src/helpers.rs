@@ -1,7 +1,7 @@
 use std::io;
 
 use bytes::BufMut;
-
+use sxd_xpath;
 /// An `io::Write`r that only requires mutable reference and assumes that there is space available
 /// in the buffer for every write operation or that it can be extended implicitly (like
 /// `bytes::BytesMut`, for example).

@@ -12,6 +12,7 @@ use crate::{
     data::FnDataFactory,
     dev::Extensions,
     guard::Guard,
+    helpers::process_xml_configuration,
     request::{HttpRequest, HttpRequestPool},
     rmap::ResourceMap,
     service::{
@@ -20,6 +21,9 @@ use crate::{
     },
     Error, HttpResponse,
 };
+
+use sxd_document::parser;
+use sxd_xpath::{Context, Factory};
 
 /// Service factory to convert [`Request`] to a [`ServiceRequest<S>`].
 ///
@@ -198,15 +202,6 @@ where
     actix_service::forward_ready!(service);
 
     fn call(&self, mut req: Request) -> Self::Future {
-        let socket = std::net::UdpSocket::bind("127.0.0.1:0").unwrap();
-        let mut buffer = [0u8; 1024];
-        //SOURCE
-        let bytes_read = socket.recv(&mut buffer).unwrap_or(0);
-        let app_config = String::from_utf8_lossy(&buffer[..bytes_read])
-            .trim_matches(char::from(0))
-            .to_string();
-        let _xml_result = crate::helpers::process_xml_configuration(&app_config);
-
         let extensions = Rc::new(RefCell::new(req.take_req_data()));
         let conn_data = req.take_conn_data();
         let (head, payload) = req.into_parts();
@@ -323,6 +318,8 @@ impl Service<ServiceRequest> for AppRouting {
         
         let _result = validate_server_routing_config(&routing_data);
         
+        let _xml_result = crate::helpers::process_xml_configuration(&routing_data);
+
         let res = self.router.recognize_fn(&mut req, |req, guards| {
             let guard_ctx = req.guard_ctx();
             guards.iter().all(|guard| guard.check(&guard_ctx))

@@ -510,6 +510,7 @@ impl Service<ServiceRequest> for ScopeService {
     actix_service::always_ready!();
 
     fn call(&self, mut req: ServiceRequest) -> Self::Future {
+
         let res = self.router.recognize_fn(&mut req, |req, guards| {
             let guard_ctx = req.guard_ctx();
             guards.iter().all(|guard| guard.check(&guard_ctx))
