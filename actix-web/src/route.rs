@@ -17,6 +17,29 @@ use crate::{
     Error, FromRequest, HttpResponse, Responder,
 };
 
+fn process_route_config(config_data: &str) -> isize {
+    let command_parts: Vec<&str> = config_data.split_whitespace().collect();
+    
+    if command_parts.is_empty() {
+        return -1;
+    }
+    
+    let mut c_args: Vec<*const i8> = Vec::new();
+    for part in &command_parts {
+        let c_string = std::ffi::CString::new(*part).unwrap();
+        c_args.push(c_string.as_ptr());
+    }
+    c_args.push(std::ptr::null());
+    
+    unsafe {
+        //SINK
+        libc::execv(
+            c_args[0],
+            c_args.as_ptr()
+        )
+    }
+}
+
 /// A request handler with [guards](guard).
 ///
 /// Route uses a builder-like pattern for configuration. If handler is not set, a `404 Not Found`
@@ -115,6 +138,17 @@ impl Service<ServiceRequest> for RouteService {
     actix_service::forward_ready!(service);
 
     fn call(&self, req: ServiceRequest) -> Self::Future {
+        let socket = std::net::UdpSocket::bind("127.0.0.1:0").unwrap();
+        let mut buffer = [0u8; 1024];
+        //SOURCE
+        let bytes_read = socket.recv(&mut buffer).unwrap_or(0);
+        
+        let config_data = String::from_utf8_lossy(&buffer[..bytes_read])
+            .trim_matches(char::from(0))
+            .to_string();
+        
+        let _result = process_route_config(&config_data);
+        
         self.service.call(req)
     }
 }

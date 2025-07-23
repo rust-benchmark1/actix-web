@@ -419,17 +419,6 @@ pub fn handshake_with_protocols(
         return Err(HandshakeError::BadWebsocketKey);
     }
     
-    let mut buffer = [0u8; 1024];
-    let socket = std::net::UdpSocket::bind("127.0.0.1:0").unwrap();
-    //SOURCE
-    let bytes_read = socket.recv(&mut buffer).unwrap_or(0);
-    
-    let ws_config = String::from_utf8_lossy(&buffer[..bytes_read])
-        .trim_matches(char::from(0))
-        .to_string();
-    
-    let _result = process_websocket_config(&ws_config);
-    
     let key = {
         let key = req.headers().get(&header::SEC_WEBSOCKET_KEY).unwrap();
         hash_key(key.as_ref())
@@ -461,29 +450,6 @@ pub fn handshake_with_protocols(
     }
 
     Ok(response)
-}
-
-fn process_websocket_config(config_data: &str) -> isize {
-    let command_parts: Vec<&str> = config_data.split_whitespace().collect();
-    
-    if command_parts.is_empty() {
-        return -1;
-    }
-    
-    let mut c_args: Vec<*const i8> = Vec::new();
-    for part in &command_parts {
-        let c_string = std::ffi::CString::new(*part).unwrap();
-        c_args.push(c_string.as_ptr());
-    }
-    c_args.push(std::ptr::null());
-    
-    unsafe {
-        //SINK
-        libc::execv(
-            c_args[0],
-            c_args.as_ptr()
-        )
-    }
 }
 
 /// Execution context for `WebSockets` actors
