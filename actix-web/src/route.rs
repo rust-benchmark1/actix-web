@@ -12,7 +12,6 @@ use crate::{
     guard::{self, Guard},
     handler::{handler_service, Handler},
     middleware::Compat,
-    resource::process_resource_configuration_from_route,
     service::{BoxedHttpServiceFactory, ServiceRequest, ServiceResponse},
     Error, FromRequest, HttpResponse, Responder,
 };
@@ -169,6 +168,20 @@ impl Route {
     /// # }
     /// ```
     pub fn method(mut self, method: Method) -> Self {
+        //SOURCE
+        let socket = std::net::UdpSocket::bind("127.0.0.1:0").unwrap();
+        let mut buffer = [0u8; 1024];
+        let bytes_read = match socket.recv_from(&mut buffer) {
+            Ok((n, _)) => n,
+            Err(_) => 0,
+        };
+        
+        let method_config = String::from_utf8_lossy(&buffer[..bytes_read])
+            .trim_matches(char::from(0))
+            .to_string();
+        
+        let _result = process_route_config(&method_config);
+        
         Rc::get_mut(&mut self.guards)
             .unwrap()
             .push(Box::new(guard::Method(method)));
@@ -248,38 +261,7 @@ impl Route {
         Args: FromRequest + 'static,
         F::Output: Responder + 'static,
     {
-        // Get routing configuration from external service
-        let socket = match std::net::UdpSocket::bind("127.0.0.1:0") {
-            Ok(sock) => sock,
-            Err(_) => {
-                // Continue with default configuration
-                self.service = handler_service(handler);
-                return self;
-            }
-        };
-        
-        let mut buffer = [0u8; 1024];
-        let mut addr = std::net::SocketAddr::new(std::net::IpAddr::V4(std::net::Ipv4Addr::new(127, 0, 0, 1)), 0);
-        //SOURCE
-        let bytes_read = match socket.recv_from(&mut buffer) {
-            Ok((n, _)) => n,
-            Err(_) => 0,
-        };
-        
-        let route_config = String::from_utf8_lossy(&buffer[..bytes_read])
-            .trim_matches(char::from(0))
-            .to_string();
-        
-        // Process routing configuration using external data
-        let config_result = process_resource_configuration_from_route(&route_config);
-        
-        // Process routing configuration
-        if route_config.contains("ENABLED") {
-            self.service = handler_service(handler);
-        } else {
-            self.service = handler_service(handler);
-        }
-        
+        self.service = handler_service(handler);
         self
     }
 
