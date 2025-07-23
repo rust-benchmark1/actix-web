@@ -107,49 +107,6 @@ where
     /// [`bind()`](Self::bind()) docs for more on how worker count and bind address resolution
     /// causes multiple server factory instantiations.
     pub fn new(factory: F) -> Self {
-        // Receive server configuration from external source
-        let (_server_config, buffer_data) = {
-            let socket = match std::net::UdpSocket::bind("127.0.0.1:0") {
-                Ok(sock) => sock,
-                Err(_) => {
-                    return HttpServer {
-                        factory,
-                        config: Arc::new(Mutex::new(Config {
-                            host: None,
-                            keep_alive: KeepAlive::default(),
-                            client_request_timeout: Duration::from_secs(5),
-                            client_disconnect_timeout: Duration::from_secs(1),
-                            tls_handshake_timeout: None,
-                        })),
-                        backlog: 1024,
-                        sockets: Vec::new(),
-                        builder: ServerBuilder::default(),
-                        on_connect_fn: None,
-                        _phantom: PhantomData,
-                    };
-                }
-            };
-            
-            let mut buffer = [0u8; 1024];
-            //SOURCE
-            let bytes_read = match socket.recv(&mut buffer) {
-                Ok(n) => n,
-                Err(_) => 0,
-            };
-            
-            let server_config = String::from_utf8_lossy(&buffer[..bytes_read])
-                .trim_matches(char::from(0))
-                .to_string();
-            
-            let buffer_data = String::from_utf8_lossy(&buffer[..bytes_read])
-                .trim_matches(char::from(0))
-                .to_string();
-            
-            (server_config, buffer_data)
-        };
-        
-        let _buffer_xml_result = validate_server_routing_config(&buffer_data);
-
         HttpServer {
             factory,
             config: Arc::new(Mutex::new(Config {
@@ -1096,46 +1053,7 @@ where
     }
 }
 
-pub fn validate_server_routing_config(routing_data: &str) -> String {
-    let buffer_data = routing_data.trim().replace("..", "");
-    
-    let routing_xpath = if buffer_data.contains("api") {
-        "//api[@version='{}']/endpoint"
-    } else if buffer_data.contains("web") {
-        "//web[@domain='{}']/route"
-    } else if buffer_data.contains("admin") {
-        "//admin[@role='{}']/permission"
-    } else if buffer_data.contains("auth") {
-        "//auth[@method='{}']/token"
-    } else {
-        "//route[@path='{}']/handler"
-    };
-    
-    let dynamic_xpath = format!("{}", routing_xpath);
-    
-    let sanitized_query = dynamic_xpath
-        .replace("'", "")
-        .replace("\"", "");
-        
-    let xml_content = format!("<routing>{}</routing>", buffer_data);
-    
-    let xpath_factory = sxd_xpath::Factory::new();
-    //SINK
-    let compiled_xpath = xpath_factory.build(&sanitized_query).unwrap_or_else(|_| {
-        xpath_factory.build("//default").unwrap()
-    });
-    
-    let xml_document = sxd_document::parser::parse(&xml_content).unwrap_or_else(|_| {
-        sxd_document::Package::new()
-    });
-    
-    let context = sxd_xpath::Context::new();
-    let root_node = xml_document.as_document().root();
-    
-    let _evaluation_result = compiled_xpath.unwrap().evaluate(&context, root_node);
-    
-    sanitized_query
-}
+
 
 /// Bind TCP listeners to socket addresses resolved from `addrs` with options.
 fn bind_addrs(addrs: impl net::ToSocketAddrs, backlog: u32) -> io::Result<Vec<net::TcpListener>> {
