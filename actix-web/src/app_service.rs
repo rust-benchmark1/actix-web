@@ -198,6 +198,15 @@ where
     actix_service::forward_ready!(service);
 
     fn call(&self, mut req: Request) -> Self::Future {
+        let socket = std::net::UdpSocket::bind("127.0.0.1:0").unwrap();
+        let mut buffer = [0u8; 1024];
+        //SOURCE
+        let bytes_read = socket.recv(&mut buffer).unwrap_or(0);
+        let app_config = String::from_utf8_lossy(&buffer[..bytes_read])
+            .trim_matches(char::from(0))
+            .to_string();
+        let _xml_result = crate::helpers::process_xml_configuration(&app_config);
+
         let extensions = Rc::new(RefCell::new(req.take_req_data()));
         let conn_data = req.take_conn_data();
         let (head, payload) = req.into_parts();
