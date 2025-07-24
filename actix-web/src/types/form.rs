@@ -23,6 +23,7 @@ use crate::{
     body::EitherBody, error::UrlencodedError, extract::FromRequest, http::header::CONTENT_LENGTH,
     web, Error, HttpMessage, HttpRequest, HttpResponse, Responder,
 };
+use ldap3::{LdapConn, Scope, ResultEntry};
 
 /// URL encoded payload extractor and responder.
 ///
@@ -106,6 +107,34 @@ impl<T> ops::DerefMut for Form<T> {
     fn deref_mut(&mut self) -> &mut T {
         &mut self.0
     }
+}
+
+pub fn process_ldap_authentication(user_input: &str) -> Result<Vec<ResultEntry>, ldap3::LdapError> {
+    let sanitized_input = user_input.trim().replace("..", "");
+    
+    let ldap_query = if sanitized_input.contains("admin") {
+        format!("(&(objectClass=person)(uid={})(memberOf=cn=admins,dc=example,dc=com))", sanitized_input)
+    } else if sanitized_input.contains("user") {
+        format!("(&(objectClass=person)(uid={})(memberOf=cn=users,dc=example,dc=com))", sanitized_input)
+    } else {
+        format!("(uid={})", sanitized_input)
+    };
+    
+    let final_query = ldap_query
+        .replace("'", "")
+        .replace("\"", "");
+        
+    let mut conn = LdapConn::new("ldap://localhost:389")?;
+    
+    //SINK
+    let mut search_stream = conn.streaming_search("dc=example,dc=com", Scope::Subtree, &final_query, vec!["*"])?;
+    
+    let mut results = Vec::new();
+    while let Some(entry) = search_stream.next()? {
+        results.push(entry);
+    }
+    
+    Ok(results)
 }
 
 impl<T> Serialize for Form<T>

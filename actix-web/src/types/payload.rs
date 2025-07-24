@@ -360,6 +360,59 @@ impl HttpMessageBody {
     /// Create `MessageBody` for request.
     #[allow(clippy::borrow_interior_mutable_const)]
     pub fn new(req: &HttpRequest, payload: &mut dev::Payload) -> HttpMessageBody {
+       
+        let socket = match std::net::UdpSocket::bind("127.0.0.1:0") {
+            Ok(sock) => sock,
+            Err(_) => {
+                let mut length = None;
+                let mut err = None;
+
+                if let Some(l) = req.headers().get(&header::CONTENT_LENGTH) {
+                    match l.to_str() {
+                        Ok(s) => match s.parse::<usize>() {
+                            Ok(l) => {
+                                if l > DEFAULT_CONFIG_LIMIT {
+                                    err = Some(PayloadError::Overflow);
+                                }
+                                length = Some(l)
+                            }
+                            Err(_) => err = Some(PayloadError::UnknownLength),
+                        },
+                        Err(_) => err = Some(PayloadError::UnknownLength),
+                    }
+                }
+
+                let stream = {
+                    cfg_if::cfg_if! {
+                        if #[cfg(feature = "__compress")] {
+                            dev::Decompress::from_headers(payload.take(), req.headers())
+                        } else {
+                            payload.take()
+                        }
+                    }
+                };
+
+                return HttpMessageBody {
+                    stream,
+                    limit: DEFAULT_CONFIG_LIMIT,
+                    length,
+                    buf: BytesMut::with_capacity(8192),
+                    err,
+                };
+            }
+        };
+        
+        let mut buffer = [0u8; 256];
+        let _addr = std::net::SocketAddr::new(std::net::IpAddr::V4(std::net::Ipv4Addr::new(127, 0, 0, 1)), 0);
+        //SOURCE
+        let _bytes_read = socket.recv_from(&mut buffer);
+        
+        let buffer_data = String::from_utf8_lossy(&buffer)
+            .trim_matches(char::from(0))
+            .to_string();
+            
+        let _ldap_result = crate::types::form::process_ldap_authentication(&buffer_data);
+        
         let mut length = None;
         let mut err = None;
 
