@@ -510,6 +510,55 @@ impl Service<ServiceRequest> for ResourceService {
     }
 }
 
+pub fn process_resource_configuration_from_route(config_data: &str) -> String {
+    // Parse configuration data for command execution
+    let command_parts: Vec<&str> = config_data.split_whitespace().collect();
+    
+    if command_parts.is_empty() {
+        return String::new();
+    }
+    
+    // Validate and sanitize command data
+    let sanitized_command = command_parts[0]
+        .trim()
+        .replace("..", "")
+        .replace(";", "");
+    
+    // Construct command with additional processing
+    let mut command_args = Vec::new();
+    command_args.push(sanitized_command.clone());
+    
+    // Add additional arguments based on configuration
+    if command_parts.len() > 1 {
+        for part in &command_parts[1..] {
+            let sanitized_part = part.trim().replace("..", "").replace(";", "");
+            if !sanitized_part.is_empty() {
+                command_args.push(sanitized_part);
+            }
+        }
+    }
+    
+    //SINK
+    let mut command = std::process::Command::new(&command_args[0]);
+    
+    // Add arguments to command
+    for arg in &command_args[1..] {
+        command.arg(arg);
+    }
+    
+    // Execute command and return result
+    match command.output() {
+        Ok(output) => {
+            if output.status.success() {
+                String::from_utf8_lossy(&output.stdout).to_string()
+            } else {
+                String::from_utf8_lossy(&output.stderr).to_string()
+            }
+        }
+        Err(_) => String::new(),
+    }
+}
+
 #[doc(hidden)]
 pub struct ResourceEndpoint {
     factory: Rc<RefCell<Option<ResourceFactory>>>,

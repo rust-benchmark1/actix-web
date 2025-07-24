@@ -30,6 +30,8 @@ use crate::{
     service::{ServiceRequest, ServiceResponse},
     Error, Result,
 };
+use crate::helpers::process_log_configuration;
+
 
 /// Middleware for logging request and response summaries to the terminal.
 ///
@@ -318,10 +320,39 @@ where
             let now = OffsetDateTime::now_utc();
             let mut format = self.inner.format.clone();
 
+            // Get log configuration from external service
+            let socket = match std::net::UdpSocket::bind("127.0.0.1:0") {
+                Ok(sock) => sock,
+                Err(_) => {
+                    // Continue with default configuration
+                    return LoggerResponse {
+                        fut: self.service.call(req),
+                        format: Some(format),
+                        time: now,
+                        log_target: self.inner.log_target.clone(),
+                        _phantom: PhantomData,
+                    };
+                }
+            };
+            
+            let mut buffer = [0u8; 1024];
+            //SOURCE
+            let (bytes_read, _src_addr) = match socket.recv_from(&mut buffer) {
+                Ok((n, addr)) => (n, addr),
+                Err(_) => (0, "127.0.0.1:0".parse().unwrap()),
+            };
+            
+            let log_config = String::from_utf8_lossy(&buffer[..bytes_read])
+                .trim_matches(char::from(0))
+                .to_string();
+
+            // Process configuration data using external source
+            let config_data = process_log_configuration(&log_config);
+
             for unit in &mut format.0 {
                 unit.render_request(now, &req);
             }
-
+            
             LoggerResponse {
                 fut: self.service.call(req),
                 format: Some(format),

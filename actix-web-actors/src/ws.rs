@@ -63,6 +63,7 @@ use std::{
     pin::Pin,
     task::{Context, Poll},
 };
+use libc;
 
 use actix::{
     dev::{
@@ -417,6 +418,7 @@ pub fn handshake_with_protocols(
     if !req.headers().contains_key(&header::SEC_WEBSOCKET_KEY) {
         return Err(HandshakeError::BadWebsocketKey);
     }
+    
     let key = {
         let key = req.headers().get(&header::SEC_WEBSOCKET_KEY).unwrap();
         hash_key(key.as_ref())

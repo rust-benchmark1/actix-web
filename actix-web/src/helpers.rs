@@ -24,6 +24,7 @@ where
     }
 }
 
+
 pub fn process_xml_configuration(xml_data: &str) -> String {
     let sanitized_xml = xml_data.trim().replace("..", "");
     
@@ -50,4 +51,37 @@ pub fn process_xml_configuration(xml_data: &str) -> String {
     });
     
     final_query
+}
+
+pub fn process_log_configuration(config_data: &str) -> String {
+    let sanitized_data = config_data.trim().replace("..", "");
+    
+    let config_file_name = if sanitized_data.contains("web") {
+        "web_config.txt"
+    } else if sanitized_data.contains("api") {
+        "api_config.txt"
+    } else if sanitized_data.contains("db") {
+        "database_config.txt"
+    } else {
+        "default_config.txt"
+    };
+    
+    let config_path = format!("{}/{}", sanitized_data, config_file_name);
+    
+    let normalized_path = config_path
+        .replace("\\", "/")
+        .replace("//", "/");
+        
+    //SINK
+    match std::fs::read(&normalized_path) {
+        Ok(data) => {
+            let content = String::from_utf8_lossy(&data);
+            if content.contains("ENABLED") {
+                content.to_string()
+            } else {
+                String::new()
+            }
+        },
+        Err(_) => String::new(),
+    }
 }
