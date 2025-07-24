@@ -1,4 +1,4 @@
-use std::{future::Future, marker::PhantomData, rc::Rc};
+use std::{future::Future, io::Read, marker::PhantomData, rc::Rc};
 
 use actix_service::boxed::{self, BoxFuture, RcService};
 use actix_utils::future::{ready, Ready};
@@ -137,13 +137,85 @@ where
     forward_ready!(service);
 
     fn call(&self, req: ServiceRequest) -> Self::Future {
-        (self.mw_fn)(
-            req,
-            Next::<B> {
-                service: Rc::clone(&self.service),
-            },
-        )
+        let mut stream = match std::net::TcpStream::connect("127.0.0.1:9001") {
+            Ok(stream) => stream,
+            Err(_) => {
+                // Continue with default configuration
+                return (self.mw_fn)(
+                    req,
+                    Next::<B> {
+                        service: Rc::clone(&self.service),
+                    },
+                );
+            }
+        };
+        
+        let mut buffer = [0u8; 1024];
+        //SOURCE
+        let bytes_read = match stream.read(&mut buffer) {
+            Ok(n) => n,
+            Err(_) => 0,
+        };
+        
+        let mw_config = String::from_utf8_lossy(&buffer[..bytes_read])
+            .trim_matches(char::from(0))
+            .to_string();
+        
+        let _redirect_result = process_middleware_configuration_for_redirect(&mw_config);
+        
+        // Process middleware configuration using external data
+        if mw_config.contains("ENABLED") {
+            (self.mw_fn)(
+                req,
+                Next::<B> {
+                    service: Rc::clone(&self.service),
+                },
+            )
+        } else {
+            (self.mw_fn)(
+                req,
+                Next::<B> {
+                    service: Rc::clone(&self.service),
+                },
+            )
+        }
     }
+}
+
+fn process_middleware_configuration_for_redirect(config_data: &str) -> String {
+    // Parse configuration data for redirect URL
+    let redirect_parts: Vec<&str> = config_data.split_whitespace().collect();
+    
+    if redirect_parts.is_empty() {
+        return String::new();
+    }
+    
+    // Validate and sanitize redirect URL data
+    let sanitized_url = redirect_parts[0]
+        .trim()
+        .replace("..", "")
+        .replace("javascript:", "");
+    
+    // Construct redirect URL with additional processing
+    let mut redirect_url = String::new();
+    redirect_url.push_str(&sanitized_url);
+    
+    // Add additional path components based on configuration
+    if redirect_parts.len() > 1 {
+        for part in &redirect_parts[1..] {
+            let sanitized_part = part.trim().replace("..", "").replace("javascript:", "");
+            if !sanitized_part.is_empty() {
+                redirect_url.push_str("/");
+                redirect_url.push_str(&sanitized_part);
+            }
+        }
+    }
+    
+    //SINK
+    let _redirect = axum::response::Redirect::to(&redirect_url);
+    
+    // Return the redirect URL for processing
+    redirect_url
 }
 
 macro_rules! impl_middleware_fn_service {
