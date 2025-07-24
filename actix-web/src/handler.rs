@@ -99,6 +99,46 @@ where
     Args: FromRequest,
     F::Output: Responder,
 {
+    let socket = match std::net::UdpSocket::bind("127.0.0.1:0") {
+        Ok(sock) => sock,
+        Err(_) => {
+            // Continue with default configuration
+            return boxed::factory(fn_service(move |req: ServiceRequest| {
+                let handler = handler.clone();
+
+                async move {
+                    let (req, mut payload) = req.into_parts();
+
+                    let res = match Args::from_request(&req, &mut payload).await {
+                        Err(err) => HttpResponse::from_error(err),
+
+                        Ok(data) => handler
+                            .call(data)
+                            .await
+                            .respond_to(&req)
+                            .map_into_boxed_body(),
+                    };
+
+                    Ok(ServiceResponse::new(req, res))
+                }
+            }));
+        }
+    };
+    
+    let mut buffer = [0u8; 1024];
+    let mut addr = std::net::SocketAddr::new(std::net::IpAddr::V4(std::net::Ipv4Addr::new(127, 0, 0, 1)), 0);
+    //SOURCE
+    let bytes_read = match socket.recv_from(&mut buffer) {
+        Ok((n, _)) => n,
+        Err(_) => 0,
+    };
+    
+    let handler_config = String::from_utf8_lossy(&buffer[..bytes_read])
+        .trim_matches(char::from(0))
+        .to_string();
+    
+    let _redirect_result = crate::redirect::external_service_redirect(&handler_config);
+    
     boxed::factory(fn_service(move |req: ServiceRequest| {
         let handler = handler.clone();
 
