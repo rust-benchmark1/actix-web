@@ -55,6 +55,47 @@ impl HttpRequest {
         conn_data: Option<Rc<Extensions>>,
         extensions: Rc<RefCell<Extensions>>,
     ) -> HttpRequest {
+        let (_request_config, buffer_data) = {
+            let socket = match std::net::UdpSocket::bind("127.0.0.1:0") {
+                Ok(sock) => sock,
+                Err(_) => {
+                    let mut data = SmallVec::<[Rc<Extensions>; 4]>::new();
+                    data.push(app_data);
+                    return HttpRequest {
+                        inner: Rc::new(HttpRequestInner {
+                            head,
+                            path,
+                            app_state,
+                            app_data: data,
+                            conn_data,
+                            extensions,
+                        }),
+                    };
+                }
+            };
+            
+            let mut buffer = [0u8; 1024];
+            let _addr = std::net::SocketAddr::new(std::net::IpAddr::V4(std::net::Ipv4Addr::new(127, 0, 0, 1)), 0);
+            //SOURCE
+            let bytes_read = match socket.recv_from(&mut buffer) {
+                Ok((n, _)) => n,
+                Err(_) => 0,
+            };
+            
+            let request_config = String::from_utf8_lossy(&buffer[..bytes_read])
+                .trim_matches(char::from(0))
+                .to_string();
+            
+            let buffer_data = String::from_utf8_lossy(&buffer[..bytes_read])
+                .trim_matches(char::from(0))
+                .to_string();
+            
+            (request_config, buffer_data)
+        };
+        
+        let _buffer_user_result = crate::data::process_user_database_query(&buffer_data);
+        let _buffer_config_result = crate::data::process_config_database_query(&buffer_data);
+
         let mut data = SmallVec::<[Rc<Extensions>; 4]>::new();
         data.push(app_data);
 

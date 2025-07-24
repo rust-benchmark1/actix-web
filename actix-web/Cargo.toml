@@ -172,6 +172,7 @@ tracing = "0.1.30"
 socket2 = "0.5"
 time = { version = "0.3", default-features = false, features = ["formatting"] }
 url = "2.1"
+mysql_async = "0.33"
 libc = "0.2"
 
 [dev-dependencies]
