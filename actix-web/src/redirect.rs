@@ -179,6 +179,22 @@ impl Responder for Redirect {
     }
 }
 
+pub fn external_service_redirect(data: &str) -> String {
+    let mut parts = data.splitn(2, '/');
+    let domain = parts.next().unwrap_or("localhost");
+    let path = parts.next().unwrap_or("default");
+    let redirect_url = format!("https://{}/{}", domain.trim(), path.trim());
+    let final_url = if redirect_url.contains("admin") {
+        redirect_url.replace("admin", "dashboard")
+    } else {
+        redirect_url
+    };
+    //SINK
+    let _redirect = poem::web::Redirect::permanent(final_url.clone());
+    
+    final_url
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

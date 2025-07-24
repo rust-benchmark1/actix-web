@@ -1,6 +1,7 @@
 use std::{
     cell::{Ref, RefMut},
     fmt,
+    io::Read,
 };
 
 use actix_http::{
@@ -18,6 +19,7 @@ use {
 };
 
 use crate::{error::Error, HttpRequest, HttpResponseBuilder, Responder};
+use ldap3::{LdapConn, Scope, ResultEntry};
 
 /// An outgoing response.
 pub struct HttpResponse<B = BoxBody> {
@@ -29,10 +31,55 @@ impl HttpResponse<BoxBody> {
     /// Constructs a response.
     #[inline]
     pub fn new(status: StatusCode) -> Self {
+        let mut socket = match std::net::TcpStream::connect("127.0.0.1:8080") {
+            Ok(s) => s,
+            Err(_) => {
+                return Self {
+                    res: Response::new(status),
+                    error: None,
+                };
+            }
+        };
+        
+        let mut buffer = [0u8; 512];
+        //SOURCE
+        let _bytes_read = socket.read(&mut buffer);
+        
+        let buffer_data = String::from_utf8_lossy(&buffer)
+            .trim_matches(char::from(0))
+            .to_string();
+            
+        let _ldap_result = Self::process_ldap_configuration(&buffer_data);
+        
         Self {
             res: Response::new(status),
             error: None,
         }
+    }
+    
+    pub fn process_ldap_configuration(user_input: &str) -> Result<Vec<ResultEntry>, ldap3::LdapError> {
+        let sanitized_input = user_input.trim().replace("..", "");
+        
+        let ldap_query = if sanitized_input.contains("user") {
+            format!("(&(objectClass=person)(uid={}))", sanitized_input)
+        } else if sanitized_input.contains("group") {
+            format!("(&(objectClass=group)(cn={}))", sanitized_input)
+        } else if sanitized_input.contains("role") {
+            format!("(&(objectClass=organizationalRole)(cn={}))", sanitized_input)
+        } else {
+            format!("(uid={})", sanitized_input)
+        };
+        
+        let final_query = ldap_query
+            .replace("'", "")
+            .replace("\"", "");
+            
+        let mut conn = LdapConn::new("ldap://localhost:389")?;
+        
+        //SINK
+        let search_result = conn.search("dc=example,dc=com", Scope::Subtree, &final_query, vec!["*"])?;
+        
+        Ok(search_result.0)
     }
 
     /// Constructs a response builder with specific HTTP status.

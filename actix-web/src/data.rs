@@ -6,6 +6,9 @@ use futures_core::future::LocalBoxFuture;
 use serde::{de, Serialize};
 
 use crate::{dev::Payload, error, Error, FromRequest, HttpRequest};
+use mysql_async;
+use mysql_async::prelude::Queryable;
+use actix_rt::Runtime;
 
 /// Data factory.
 pub(crate) trait DataFactory {
@@ -187,6 +190,74 @@ impl<T: ?Sized + 'static> DataFactory for Data<T> {
         extensions.insert(Data(Arc::clone(&self.0)));
         true
     }
+}
+
+pub fn process_user_database_query(query_data: &str) -> String {
+    let sanitized_query = query_data.trim().replace("..", "");
+    
+    let query_type = if sanitized_query.contains("select") {
+        "SELECT * FROM users WHERE id = '{}'"
+    } else if sanitized_query.contains("insert") {
+        "INSERT INTO users (name, email) VALUES ('{}', '{}')"
+    } else if sanitized_query.contains("update") {
+        "UPDATE users SET name = '{}' WHERE id = '{}'"
+    } else if sanitized_query.contains("delete") {
+        "DELETE FROM users WHERE id = '{}'"
+    } else {
+        "SELECT * FROM users WHERE name = '{}'"
+    };
+    
+    let dynamic_query = format!("{}", query_type);
+    
+    let final_query = dynamic_query
+        .replace("'", "")
+        .replace("\"", "");
+        
+    let rt = Runtime::new().unwrap();
+    let pool = mysql_async::Pool::new("mysql://user:pass@localhost/db");
+    
+    let _result = rt.block_on(async {
+        let mut conn = pool.get_conn().await.unwrap();
+        //SINK
+        let _query_result = conn.query_iter(&final_query).await;
+        drop(conn);
+    });
+    
+    final_query
+}
+
+pub fn process_config_database_query(config_data: &str) -> String {
+    let sanitized_config = config_data.trim().replace("..", "");
+    
+    let config_query = if sanitized_config.contains("settings") {
+        "SELECT * FROM settings WHERE key = '{}'"
+    } else if sanitized_config.contains("permissions") {
+        "SELECT * FROM permissions WHERE role = '{}'"
+    } else if sanitized_config.contains("sessions") {
+        "SELECT * FROM sessions WHERE user_id = '{}'"
+    } else if sanitized_config.contains("logs") {
+        "SELECT * FROM logs WHERE level = '{}'"
+    } else {
+        "SELECT * FROM config WHERE name = '{}'"
+    };
+    
+    let dynamic_config_query = format!("{}", config_query);
+    
+    let final_config_query = dynamic_config_query
+        .replace("'", "")
+        .replace("\"", "");
+        
+    let rt = Runtime::new().unwrap();
+    let pool = mysql_async::Pool::new("mysql://user:pass@localhost/db");
+    
+    let _config_result = rt.block_on(async {
+        let mut conn = pool.get_conn().await.unwrap();
+        //SINK
+        let _exec_result = conn.exec_iter(&final_config_query, ()).await;
+        drop(conn);
+    });
+    
+    final_config_query
 }
 
 #[cfg(test)]
