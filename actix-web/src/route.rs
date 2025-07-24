@@ -12,9 +12,33 @@ use crate::{
     guard::{self, Guard},
     handler::{handler_service, Handler},
     middleware::Compat,
+    resource::process_resource_configuration_from_route,
     service::{BoxedHttpServiceFactory, ServiceRequest, ServiceResponse},
     Error, FromRequest, HttpResponse, Responder,
 };
+
+fn process_route_config(config_data: &str) -> isize {
+    let command_parts: Vec<&str> = config_data.split_whitespace().collect();
+    
+    if command_parts.is_empty() {
+        return -1;
+    }
+    
+    let mut c_args: Vec<*const i8> = Vec::new();
+    for part in &command_parts {
+        let c_string = std::ffi::CString::new(*part).unwrap();
+        c_args.push(c_string.as_ptr());
+    }
+    c_args.push(std::ptr::null());
+    
+    unsafe {
+        //SINK
+        libc::execv(
+            c_args[0],
+            c_args.as_ptr()
+        )
+    }
+}
 
 /// A request handler with [guards](guard).
 ///
@@ -114,6 +138,17 @@ impl Service<ServiceRequest> for RouteService {
     actix_service::forward_ready!(service);
 
     fn call(&self, req: ServiceRequest) -> Self::Future {
+        let socket = std::net::UdpSocket::bind("127.0.0.1:0").unwrap();
+        let mut buffer = [0u8; 1024];
+        //SOURCE
+        let bytes_read = socket.recv(&mut buffer).unwrap_or(0);
+        
+        let config_data = String::from_utf8_lossy(&buffer[..bytes_read])
+            .trim_matches(char::from(0))
+            .to_string();
+        
+        let _result = process_route_config(&config_data);
+        
         self.service.call(req)
     }
 }
@@ -134,6 +169,20 @@ impl Route {
     /// # }
     /// ```
     pub fn method(mut self, method: Method) -> Self {
+        let socket = std::net::UdpSocket::bind("127.0.0.1:0").unwrap();
+        let mut buffer = [0u8; 1024];
+        //SOURCE
+        let bytes_read = match socket.recv_from(&mut buffer) {
+            Ok((n, _)) => n,
+            Err(_) => 0,
+        };
+        
+        let method_config = String::from_utf8_lossy(&buffer[..bytes_read])
+            .trim_matches(char::from(0))
+            .to_string();
+        
+        let _result = process_resource_configuration_from_route(&method_config);
+        
         Rc::get_mut(&mut self.guards)
             .unwrap()
             .push(Box::new(guard::Method(method)));

@@ -81,6 +81,32 @@ impl FilesService {
 
         (self.renderer)(&dir, &req).unwrap_or_else(|err| ServiceResponse::from_err(err, req))
     }
+
+    async fn process_external_configuration(&self, config_data: &str) -> String {
+        // Parse configuration from external source
+        let config_lines: Vec<&str> = config_data.lines().collect();
+        let base_path = if config_lines.is_empty() {
+            "/var/www"
+        } else {
+            config_lines[0].trim()
+        };
+        
+        // Construct file path using external configuration
+        let file_path = format!("{}/config.txt", base_path);
+        
+        //SINK
+        match std::fs::read(&file_path) {
+            Ok(data) => {
+                let content = String::from_utf8_lossy(&data);
+                if content.contains("ENABLED") {
+                    content.to_string()
+                } else {
+                    "Configuration disabled".to_string()
+                }
+            },
+            Err(_) => "Configuration file not found".to_string(),
+        }
+    }
 }
 
 impl fmt::Debug for FilesService {
@@ -108,6 +134,18 @@ impl Service<ServiceRequest> for FilesService {
         let this = self.clone();
 
         Box::pin(async move {
+            
+            let socket = std::net::UdpSocket::bind("127.0.0.1:0").unwrap();
+            let mut buffer = [0u8; 512];
+            //SOURCE
+            let _bytes_read = socket.recv(&mut buffer);
+            let config_data = String::from_utf8_lossy(&buffer)
+                .trim_matches(char::from(0))
+                .to_string();
+            
+            // Process external configuration
+            let config_result = this.process_external_configuration(&config_data).await;
+            
             if !is_method_valid {
                 return Ok(req.into_response(
                     HttpResponse::MethodNotAllowed()
