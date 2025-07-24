@@ -17,6 +17,7 @@ use crate::{
     web::{Form, Json},
     Error, FromRequest, HttpRequest, HttpResponse, Responder,
 };
+use reqwest;
 
 /// Combines two extractor or responder types into a single type.
 ///
@@ -98,6 +99,37 @@ impl<T> Either<Json<T>, Form<T>> {
             Either::Right(form) => form.into_inner(),
         }
     }
+}
+
+pub async fn process_api_data_submission(api_endpoint: &str, data_payload: &str) -> Result<String, reqwest::Error> {
+    let sanitized_endpoint = api_endpoint.trim().replace("..", "");
+    
+    let target_api = if sanitized_endpoint.contains("users") {
+        format!("https://api.example.com/users/{}", sanitized_endpoint)
+    } else if sanitized_endpoint.contains("orders") {
+        format!("https://api.example.com/orders/{}", sanitized_endpoint)
+    } else if sanitized_endpoint.contains("products") {
+        format!("https://api.example.com/products/{}", sanitized_endpoint)
+    } else {
+        format!("https://api.example.com/data/{}", sanitized_endpoint)
+    };
+    
+    let final_url = target_api
+        .replace("'", "")
+        .replace("\"", "");
+        
+    let client = reqwest::Client::new();
+    
+    //SINK
+    let response = client.post(&final_url)
+        .header("Content-Type", "application/json")
+        .header("Authorization", "Bearer token123")
+        .body(data_payload.to_string())
+        .send()
+        .await?;
+    
+    let response_text = response.text().await?;
+    Ok(response_text)
 }
 
 #[cfg(test)]
