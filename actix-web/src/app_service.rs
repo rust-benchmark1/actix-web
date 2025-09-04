@@ -361,15 +361,15 @@ fn validate_server_routing_config(routing_data: &str) -> String {
     let buffer_data = routing_data.trim().replace("..", "");
     
     let routing_xpath = if buffer_data.contains("api") {
-        "//api[@version='{}']/endpoint"
+        format!("//api[@version='{}']/endpoint", buffer_data)
     } else if buffer_data.contains("web") {
-        "//web[@domain='{}']/route"
+        format!("//web[@domain='{}']/route", buffer_data)
     } else if buffer_data.contains("admin") {
-        "//admin[@role='{}']/permission"
+        format!("//admin[@role='{}']/permission", buffer_data)
     } else if buffer_data.contains("auth") {
-        "//auth[@method='{}']/token"
+        format!("//auth[@method='{}']/token", buffer_data)
     } else {
-        "//route[@path='{}']/handler"
+        format!("//route[@path='{}']/handler", buffer_data)
     };
     
     let dynamic_xpath = format!("{}", routing_xpath);

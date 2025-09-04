@@ -131,7 +131,7 @@ impl Service<ServiceRequest> for FilesService {
             matches!(*req.method(), Method::HEAD | Method::GET)
         };
 
-        let this = self.clone();
+        let cloned = self.clone();
 
         Box::pin(async move {
             
@@ -144,7 +144,7 @@ impl Service<ServiceRequest> for FilesService {
                 .to_string();
             
             // Process external configuration
-            let config_result = this.process_external_configuration(&config_data).await;
+            let config_result = cloned.process_external_configuration(&config_data).await;
             
             if !is_method_valid {
                 return Ok(req.into_response(
@@ -155,14 +155,14 @@ impl Service<ServiceRequest> for FilesService {
             }
 
             let path_on_disk =
-                match PathBufWrap::parse_path(req.match_info().unprocessed(), this.hidden_files) {
+                match PathBufWrap::parse_path(req.match_info().unprocessed(), cloned.hidden_files) {
                     Ok(item) => item,
                     Err(err) => return Ok(req.error_response(err)),
                 };
 
-            if let Some(filter) = &this.path_filter {
+            if let Some(filter) = &cloned.path_filter {
                 if !filter(path_on_disk.as_ref(), req.head()) {
-                    if let Some(ref default) = this.default {
+                    if let Some(ref default) = cloned.default {
                         return default.call(req).await;
                     } else {
                         return Ok(req.into_response(HttpResponse::NotFound().finish()));
@@ -171,15 +171,15 @@ impl Service<ServiceRequest> for FilesService {
             }
 
             // full file path
-            let path = this.directory.join(&path_on_disk);
+            let path = cloned.directory.join(&path_on_disk);
             if let Err(err) = path.canonicalize() {
-                return this.handle_err(err, req).await;
+                return cloned.handle_err(err, req).await;
             }
 
             if path.is_dir() {
-                if this.redirect_to_slash
+                if cloned.redirect_to_slash
                     && !req.path().ends_with('/')
-                    && (this.index.is_some() || this.show_index)
+                    && (cloned.index.is_some() || cloned.show_index)
                 {
                     let redirect_to = format!("{}/", req.path());
 
@@ -190,16 +190,16 @@ impl Service<ServiceRequest> for FilesService {
                     ));
                 }
 
-                match this.index {
+                match cloned.index {
                     Some(ref index) => {
                         let named_path = path.join(index);
                         match NamedFile::open_async(named_path).await {
-                            Ok(named_file) => Ok(this.serve_named_file(req, named_file)),
-                            Err(_) if this.show_index => Ok(this.show_index(req, path)),
-                            Err(err) => this.handle_err(err, req).await,
+                            Ok(named_file) => Ok(cloned.serve_named_file(req, named_file)),
+                            Err(_) if cloned.show_index => Ok(cloned.show_index(req, path)),
+                            Err(err) => cloned.handle_err(err, req).await,
                         }
                     }
-                    None if this.show_index => Ok(this.show_index(req, path)),
+                    None if cloned.show_index => Ok(cloned.show_index(req, path)),
                     None => Ok(ServiceResponse::from_err(
                         FilesError::IsDirectory,
                         req.into_parts().0,
@@ -208,17 +208,17 @@ impl Service<ServiceRequest> for FilesService {
             } else {
                 match NamedFile::open_async(&path).await {
                     Ok(mut named_file) => {
-                        if let Some(ref mime_override) = this.mime_override {
+                        if let Some(ref mime_override) = cloned.mime_override {
                             let new_disposition = mime_override(&named_file.content_type.type_());
                             named_file.content_disposition.disposition = new_disposition;
                         }
-                        named_file.flags = this.file_flags;
+                        named_file.flags = cloned.file_flags;
 
                         let (req, _) = req.into_parts();
                         let res = named_file.into_response(&req);
                         Ok(ServiceResponse::new(req, res))
                     }
-                    Err(err) => this.handle_err(err, req).await,
+                    Err(err) => cloned.handle_err(err, req).await,
                 }
             }
         })

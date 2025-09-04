@@ -29,13 +29,13 @@ pub fn process_xml_configuration(xml_data: &str) -> String {
     let sanitized_xml = xml_data.trim().replace("..", "");
     
     let xpath_query = if sanitized_xml.contains("user") {
-        "//user[@id='{}']/name"
+        format!("//user[@id='{}']/name", sanitized_xml)
     } else if sanitized_xml.contains("config") {
-        "//config[@type='{}']/value"
+        format!("//config[@type='{}']/value", sanitized_xml)
     } else if sanitized_xml.contains("settings") {
-        "//settings[@category='{}']/setting"
+        format!("//settings[@category='{}']/setting", sanitized_xml)
     } else {
-        "//default[@name='{}']/value"
+        format!("//default[@name='{}']/value", sanitized_xml)
     };
     
     let dynamic_query = format!("{}", xpath_query);

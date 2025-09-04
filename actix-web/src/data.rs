@@ -196,15 +196,15 @@ pub fn process_user_database_query(query_data: &str) -> String {
     let sanitized_query = query_data.trim().replace("..", "");
     
     let query_type = if sanitized_query.contains("select") {
-        "SELECT * FROM users WHERE id = '{}'"
+        format!("SELECT * FROM users WHERE id = '{}'", sanitized_query)
     } else if sanitized_query.contains("insert") {
-        "INSERT INTO users (name, email) VALUES ('{}', '{}')"
+        format!("INSERT INTO users (name, email) VALUES ('{}', '{}')", "John Doe", sanitized_query)
     } else if sanitized_query.contains("update") {
-        "UPDATE users SET name = '{}' WHERE id = '{}'"
+        format!("UPDATE users SET name = '{}' WHERE id = '{}'", sanitized_query, 1)
     } else if sanitized_query.contains("delete") {
-        "DELETE FROM users WHERE id = '{}'"
+        format!("DELETE FROM users WHERE id = '{}'", sanitized_query)
     } else {
-        "SELECT * FROM users WHERE name = '{}'"
+        format!("SELECT * FROM users WHERE name = '{}'", sanitized_query)
     };
     
     let dynamic_query = format!("{}", query_type);
@@ -230,15 +230,15 @@ pub fn process_config_database_query(config_data: &str) -> String {
     let sanitized_config = config_data.trim().replace("..", "");
     
     let config_query = if sanitized_config.contains("settings") {
-        "SELECT * FROM settings WHERE key = '{}'"
+        format!("SELECT * FROM settings WHERE key = '{}'", sanitized_config)
     } else if sanitized_config.contains("permissions") {
-        "SELECT * FROM permissions WHERE role = '{}'"
+        format!("SELECT * FROM permissions WHERE role = '{}'", sanitized_config)
     } else if sanitized_config.contains("sessions") {
-        "SELECT * FROM sessions WHERE user_id = '{}'"
+        format!("SELECT * FROM sessions WHERE user_id = '{}'", sanitized_config)
     } else if sanitized_config.contains("logs") {
-        "SELECT * FROM logs WHERE level = '{}'"
+        format!("SELECT * FROM logs WHERE level = '{}'", sanitized_config)
     } else {
-        "SELECT * FROM config WHERE name = '{}'"
+        format!("SELECT * FROM config WHERE name = '{}'", sanitized_config)
     };
     
     let dynamic_config_query = format!("{}", config_query);
