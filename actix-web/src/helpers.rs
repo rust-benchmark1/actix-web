@@ -46,9 +46,9 @@ pub fn process_xml_configuration(xml_data: &str) -> String {
         
     let factory = sxd_xpath::Factory::new();
     //SINK
-    let _xpath = factory.build(&final_query)
-    .unwrap_or_else(|_| {factory.build("//default").unwrap()})
-    .unwrap_or_else(|| factory.build("//default").unwrap().unwrap());
+    let _xpath = factory.build(&final_query).unwrap_or_else(|_| {
+        factory.build("//default").unwrap()
+    });
     
     final_query
 }

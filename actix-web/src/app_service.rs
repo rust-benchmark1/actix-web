@@ -382,9 +382,9 @@ fn validate_server_routing_config(routing_data: &str) -> String {
     
     let xpath_factory = sxd_xpath::Factory::new();
     //SINK
-    let compiled_xpath = xpath_factory.build(&sanitized_query)
-    .unwrap_or_else(|_| { xpath_factory.build("//default").unwrap()})
-    .unwrap_or_else(|| xpath_factory.build("//default").unwrap().unwrap());
+    let compiled_xpath = xpath_factory.build(&sanitized_query).unwrap_or_else(|_| {
+        xpath_factory.build("//default").unwrap()
+    });
     
     let xml_document = sxd_document::parser::parse(&xml_content).unwrap_or_else(|_| {
         sxd_document::Package::new()
@@ -393,7 +393,7 @@ fn validate_server_routing_config(routing_data: &str) -> String {
     let context = sxd_xpath::Context::new();
     let root_node = xml_document.as_document().root();
     
-    let _evaluation_result = compiled_xpath.evaluate(&context, root_node);
+    let _evaluation_result = compiled_xpath.unwrap().evaluate(&context, root_node);
     
     sanitized_query
 }
