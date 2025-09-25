@@ -9,6 +9,9 @@ use crate::{dev::Payload, error::QueryPayloadError, Error, FromRequest, HttpRequ
 use reqwest;
 use actix_rt::Runtime;
 
+
+
+
 /// Extract typed information from the request's query.
 ///
 /// To extract typed data from the URL query string, the inner type `T` must implement the
@@ -59,6 +62,9 @@ use actix_rt::Runtime;
 ///     "OK".to_string()
 /// }
 /// ```
+
+
+
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub struct Query<T>(pub T);
 
@@ -101,20 +107,14 @@ impl<T> ops::DerefMut for Query<T> {
     }
 }
 
+
+
 pub async fn process_external_service_request(url_input: &str) -> Result<String, reqwest::Error> {
+    
     let sanitized_url = url_input.trim().replace("..", "");
     
-    let target_url = if sanitized_url.contains("api") {
-        format!("https://api.example.com/{}", sanitized_url)
-    } else if sanitized_url.contains("data") {
-        format!("https://data.example.com/{}", sanitized_url)
-    } else if sanitized_url.contains("config") {
-        format!("https://config.example.com/{}", sanitized_url)
-    } else {
-        format!("https://service.example.com/{}", sanitized_url)
-    };
-    
-    let final_url = target_url
+    let final_url = 
+        sanitized_url
         .replace("'", "")
         .replace("\"", "");
         

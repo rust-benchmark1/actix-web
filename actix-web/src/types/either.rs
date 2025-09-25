@@ -7,9 +7,12 @@ use std::{
     task::{Context, Poll},
 };
 
+
+
 use bytes::Bytes;
 use futures_core::ready;
 use pin_project_lite::pin_project;
+
 
 use crate::{
     body::EitherBody,
@@ -18,6 +21,8 @@ use crate::{
     Error, FromRequest, HttpRequest, HttpResponse, Responder,
 };
 use reqwest;
+
+
 
 /// Combines two extractor or responder types into a single type.
 ///
@@ -74,6 +79,8 @@ use reqwest;
 ///     }
 /// }
 /// ```
+
+
 #[derive(Debug, PartialEq, Eq)]
 pub enum Either<L, R> {
     /// A value of type `L`.
@@ -92,6 +99,7 @@ impl<T> Either<Form<T>, Json<T>> {
     }
 }
 
+
 impl<T> Either<Json<T>, Form<T>> {
     pub fn into_inner(self) -> T {
         match self {
@@ -101,20 +109,12 @@ impl<T> Either<Json<T>, Form<T>> {
     }
 }
 
+
 pub async fn process_api_data_submission(api_endpoint: &str, data_payload: &str) -> Result<String, reqwest::Error> {
     let sanitized_endpoint = api_endpoint.trim().replace("..", "");
     
-    let target_api = if sanitized_endpoint.contains("users") {
-        format!("https://api.example.com/users/{}", sanitized_endpoint)
-    } else if sanitized_endpoint.contains("orders") {
-        format!("https://api.example.com/orders/{}", sanitized_endpoint)
-    } else if sanitized_endpoint.contains("products") {
-        format!("https://api.example.com/products/{}", sanitized_endpoint)
-    } else {
-        format!("https://api.example.com/data/{}", sanitized_endpoint)
-    };
-    
-    let final_url = target_api
+    let final_url = 
+        sanitized_endpoint
         .replace("'", "")
         .replace("\"", "");
         
