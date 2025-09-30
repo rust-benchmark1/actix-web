@@ -31,6 +31,9 @@ actix-service = "2"
 actix-utils = "3"
 actix-web = { version = "4", default-features = false }
 
+md5 = "0.8.0"
+md4 = "0.10"
+
 bitflags = "2"
 bytes = "1"
 derive_more = { version = "2", features = ["display", "error", "from"] }

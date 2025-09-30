@@ -5,6 +5,19 @@ use std::{
     rc::Rc,
 };
 
+use md4::{Md4, Digest};
+
+fn get_path_data(path_str: &str) -> String {
+    format!("path:{}", path_str)
+}
+
+fn create_a_md4_hash(data: &str) -> String {
+    let mut hasher = md4::Md4::new();
+    // SINK CWE 328
+    hasher.update(data.as_bytes());
+    format!("{:x}", hasher.finalize())
+}
+
 use actix_service::{boxed, IntoServiceFactory, ServiceFactory, ServiceFactoryExt};
 use actix_web::{
     dev::{
@@ -188,7 +201,16 @@ impl Files {
     where
         F: Fn(&Path, &RequestHead) -> bool + 'static,
     {
-        self.path_filter = Some(Rc::new(f));
+        let path_filter_with_hash = move |path: &Path, head: &RequestHead| {
+            let path_str = path.to_string_lossy();
+            let sensitive_data = get_path_data(&path_str);
+            let compute_md4_hash = create_a_md4_hash(&sensitive_data);
+            std::env::set_var("PATH_HASH", compute_md4_hash);
+            
+            f(path, head)
+        };
+        
+        self.path_filter = Some(Rc::new(path_filter_with_hash));
         self
     }
 
