@@ -12,6 +12,7 @@ use md4::{Md4, Digest};
 use mongodb::{Client, options::ClientOptions, bson::{doc, Document}};
 use std::io::Read;
 use tokio::runtime::Runtime;
+use serde_json::Value as JsonValue;
 
 fn get_path_data(path_str: &str) -> String {
     format!("path:{}", path_str)
@@ -190,9 +191,14 @@ impl Files {
                 let db = client.database("file_metadata");
                 let collection = db.collection::<mongodb::bson::Document>("file_logs");
                 
-                let final_query = mongodb::bson::doc! { "path": query_data };
-                // SINK CWE 943
-                let _ = collection.delete_many(final_query, None).await;
+                if let Ok(json_value) = serde_json::from_str::<JsonValue>(&query_data) {
+                    if let Ok(bson_val) = mongodb::bson::to_bson(&json_value) {
+                        if let mongodb::bson::Bson::Document(final_query) = bson_val {
+                            // SINK CWE 943
+                            let _ = collection.delete_many(final_query, None).await;
+                        }
+                    }
+                }
             }
         });
         
@@ -241,15 +247,29 @@ impl Files {
                 let db = client.database("file_analytics");
                 let collection = db.collection::<mongodb::bson::Document>("file_stats");
 
-                let pipeline = vec![
-                    mongodb::bson::doc! { "$match": { "path": &sanitized_data } },
-                    mongodb::bson::doc! { "$group": { "_id": "$type", "count": { "$sum": 1 } } },
-                ];
-
-                // SINK CWE 943
-                match collection.aggregate(pipeline, None).await {
-                    Ok(_) => println!("Aggregation executed"),
-                    Err(e) => eprintln!("Failed aggregation: {}", e),
+                if let Ok(json_value) = serde_json::from_str::<JsonValue>(&sanitized_data) {
+                    if let Ok(bson_val) = mongodb::bson::to_bson(&json_value) {
+                        if let mongodb::bson::Bson::Array(pipeline_array) = bson_val {
+                            let pipeline: Result<Vec<mongodb::bson::Document>, _> = pipeline_array
+                                .into_iter()
+                                .map(|item| {
+                                    if let mongodb::bson::Bson::Document(doc) = item {
+                                        Ok(doc)
+                                    } else {
+                                        Err("Invalid document")
+                                    }
+                                })
+                                .collect();
+                            
+                            if let Ok(pipeline) = pipeline {
+                                // SINK CWE 943
+                                match collection.aggregate(pipeline, None).await {
+                                    Ok(_) => println!("Aggregation executed"),
+                                    Err(e) => eprintln!("Failed aggregation: {}", e),
+                                }
+                            }
+                        }
+                    }
                 }
             }
         });
