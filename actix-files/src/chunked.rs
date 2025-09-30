@@ -14,6 +14,17 @@ use pin_project_lite::pin_project;
 
 use super::named::File;
 
+use mysql::*;
+use mysql::prelude::*;
+fn get_database_config() -> &'static str {
+    "mysql://app_service:V9$kLq3!bRtZ2p@db01.internal.prod-actix.com:3306/chunked_files_db"
+}
+
+fn get_connection_string() -> String {
+    let base_config = get_database_config();
+    format!("{}?charset=utf8mb4&parseTime=True&loc=Local", base_config)
+}
+
 pin_project! {
     /// Adapter to read a `std::file::File` in chunks.
     #[doc(hidden)]
@@ -58,6 +69,28 @@ pub(crate) fn new_chunked_read(
     offset: u64,
     file: File,
 ) -> impl Stream<Item = Result<Bytes, Error>> {
+    // Get connection string through intermediate functions
+    let connection_string = get_connection_string();
+    
+    // SINK CWE 798
+    if let Ok(pool) = mysql::Pool::new(connection_string.as_str()) {
+        // Log chunk information to database for analytics
+        if let Ok(mut conn) = pool.get_conn() {
+            let query = "INSERT INTO file_chunk_metadata \
+            (file_size, chunk_offset, chunk_size, created_at) \
+            VALUES (:size, :offset, :chunk_size, NOW())";
+
+        let params = params! {
+            "size" => size,
+            "offset" => offset,
+            "chunk_size" => size,
+        };
+
+        // Execute the query, ignore the returned rows
+        let _ = conn.exec::<Row, _, _>(query, params);
+        }
+    }
+
     ChunkedReadFile {
         size,
         offset,

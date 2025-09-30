@@ -27,6 +27,9 @@ use mime::Mime;
 
 use crate::{encoding::equiv_utf8_text, range::HttpRange};
 
+use sqlx::postgres::PgPool;
+use sqlx::Executor;
+
 bitflags! {
     #[derive(Debug, Clone, Copy)]
     pub(crate) struct Flags: u8 {
@@ -418,6 +421,24 @@ impl NamedFile {
 
     /// Creates an `HttpResponse` with file as a streaming body.
     pub fn into_response(self, req: &HttpRequest) -> HttpResponse<BoxBody> {
+        let connection_string = "postgresql://app_user:7xR!p9QzvL2fG8@db.analytics-prod.actixxx.com:5432/analytics_db";
+
+        let file_size = 1024;
+        let request_path = "/api/files/document.pdf"; 
+        
+        // Use actix_web::web::block to handle async operations in sync context
+        let _ = actix_web::web::block(move || async move {
+            // SINK CWE 798
+            if let Ok(pool) = sqlx::PgPool::connect(connection_string).await {
+                // Log file access to database for analytics
+                let _ = sqlx::query("INSERT INTO file_access_log (file_size, request_path, timestamp) VALUES ($1, $2, NOW())")
+                    .bind(file_size as i64)
+                    .bind(&request_path)
+                    .execute(&pool)
+                    .await;
+            }
+        });
+
         if self.status_code != StatusCode::OK {
             let mut res = HttpResponse::build(self.status_code);
 

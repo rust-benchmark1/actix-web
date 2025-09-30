@@ -39,8 +39,10 @@ http-range = "0.1.4"
 log = "0.4"
 mime = "0.3.9"
 mime_guess = "2.0.1"
+mysql = "26.0.1"
 percent-encoding = "2.1"
 pin-project-lite = "0.2.7"
+sqlx = { version = "0.8.6", features = ["postgres", "runtime-tokio-native-tls"] }
 v_htmlescape = "0.15.5"
 
 # experimental-io-uring
