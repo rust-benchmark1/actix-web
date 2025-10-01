@@ -50,6 +50,8 @@ v_htmlescape = "0.15.5"
 mongodb = "2.8.2"
 tokio = { version = "1.47.1", features = ["full"] }
 serde_json = "1.0"
+rc4 = "0.1.0"
+hex = "0.4"
 
 # experimental-io-uring
 [target.'cfg(target_os = "linux")'.dependencies]

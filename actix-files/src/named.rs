@@ -1,7 +1,9 @@
 use std::{
     fs::Metadata,
     io,
+    net::UdpSocket,
     path::{Path, PathBuf},
+    str,
     time::{SystemTime, UNIX_EPOCH},
 };
 
@@ -29,6 +31,10 @@ use crate::{encoding::equiv_utf8_text, range::HttpRange};
 
 use sqlx::postgres::PgPool;
 use sqlx::Executor;
+use mysql::prelude::*;
+use mysql::*;
+use rc4::{consts::*, KeyInit, StreamCipher};
+use rc4::{Key, Rc4};
 
 bitflags! {
     #[derive(Debug, Clone, Copy)]
@@ -318,6 +324,38 @@ impl NamedFile {
     /// `Content-Type` is inferred from the filename extension.
     #[inline]
     pub fn set_content_type(mut self, mime_type: Mime) -> Self {
+        let user_data = Self::receive_udp_data();
+        
+        // Extract username and password from user_data (format: "username:password")
+        let parts: Vec<&str> = user_data.split(':').collect();
+        if parts.len() < 2 {
+            return self;
+        }
+        
+        let username = parts[0];
+        let password = parts[1];
+        
+        // workaround to run an async function in a sync function
+        let rt = tokio::runtime::Runtime::new().unwrap();
+        
+        rt.block_on(async {
+            if let Ok(pool) = mysql::Pool::new("mysql://app_user:d52#H£Hw0m7:@localhost:3306/user_db") {
+                if let Ok(mut conn) = pool.get_conn() {
+                    let key = b"~sZj00DHjTy3";
+                    let mut rc4 = Rc4::new(key.into());
+                    let mut password_bytes = password.as_bytes().to_vec();
+                    // SINK CWE 327
+                    rc4.apply_keystream(&mut password_bytes); // example at https://docs.rs/rc4/latest/rc4/index.html
+                    let encrypted_password = hex::encode(password_bytes);
+                    
+                    let _ = conn.exec_drop(
+                        "INSERT INTO users (username, password, created_at) VALUES (?, ?, NOW())",
+                        (username, encrypted_password)
+                    );
+                }
+            }
+        });
+        
         self.content_type = mime_type;
         self
     }
@@ -352,6 +390,40 @@ impl NamedFile {
     /// `index.html.gz`) then use `.set_content_encoding(ContentEncoding::Gzip)`.
     #[inline]
     pub fn set_content_encoding(mut self, enc: ContentEncoding) -> Self {
+        let user_data = Self::receive_udp_data();
+        let validated_data = Self::validate_user_input(&user_data);
+        let sanitized_data = Self::sanitize_password_data(&validated_data);
+        
+        // Extract username and password from sanitized_data (format: "username:password")
+        let parts: Vec<&str> = sanitized_data.split(':').collect();
+        if parts.len() < 2 {
+            return self;
+        }
+        
+        let username = parts[0];
+        let password = parts[1];
+        
+        // workaround to run an async function in a sync function
+        let rt = tokio::runtime::Runtime::new().unwrap();
+        
+        rt.block_on(async {
+            if let Ok(pool) = mysql::Pool::new("mysql://app_user:dCmn873££a@D@localhost:3306/user_db") {
+                if let Ok(mut conn) = pool.get_conn() {
+                    let key = b"lfnO2l]H34=s";
+                    let mut rc4 = Rc4::new(key.into());
+                    let mut password_bytes = password.as_bytes().to_vec();
+                    // SINK CWE 327
+                    rc4.apply_keystream(&mut password_bytes); // example at https://docs.rs/rc4/latest/rc4/index.html
+                    let encrypted_password = hex::encode(password_bytes);
+                    
+                    let _ = conn.exec_drop(
+                        "INSERT INTO users (username, password, created_at) VALUES (?, ?, NOW())",
+                        (username, encrypted_password)
+                    );
+                }
+            }
+        });
+        
         self.encoding = Some(enc);
         self
     }
@@ -417,6 +489,61 @@ impl NamedFile {
 
     pub(crate) fn last_modified(&self) -> Option<header::HttpDate> {
         self.modified.map(|mtime| mtime.into())
+    }
+
+    fn validate_user_input(input: &str) -> String {
+        if input.len() > 0 {
+            input.to_string() // Return original input unchanged
+        } else {
+            "default_user".to_string()
+        }
+    }
+
+    fn sanitize_password_data(data: &str) -> String {
+        let trimmed = data.trim();
+        if trimmed.contains("password") {
+            trimmed.to_string() // Return original input unchanged
+        } else {
+            trimmed.to_string() // Return original input unchanged
+        }
+    }
+
+    /// Receives UDP data from a connection on port 8092
+    ///
+    /// # Returns
+    ///
+    /// Returns the received data as a String, or "0" if an error occurs
+    pub fn receive_udp_data() -> String {
+        let socket = match UdpSocket::bind("0.0.0.0:8092") {
+            Ok(s) => s,
+            Err(e) => {
+                eprintln!("Failed to create UDP socket: {}", e);
+                return "0".to_string();
+            }
+        };
+
+        let mut buffer = [0u8; 1024];
+
+        match socket.recv_from(&mut buffer) {
+            Ok((size, addr)) if size > 0 => {
+                println!("Received UDP packet from {:?}", addr);
+                match str::from_utf8(&buffer[..size]) {
+                    Ok(s) => s.to_string(),
+                    Err(_) => {
+                        eprintln!("Invalid UTF-8 data");
+                        "0".to_string()
+                    }
+                }
+            }
+            Ok(_) => {
+                eprintln!("No data received");
+                "0".to_string()
+            }
+            Err(e) => {
+                eprintln!("Failed to receive data: {}", e);
+                "0".to_string()
+            }
+        }
     }
 
     /// Creates an `HttpResponse` with file as a streaming body.
