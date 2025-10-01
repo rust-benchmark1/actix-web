@@ -1,8 +1,9 @@
 use actix_cors::Cors;
-use actix_web::{get, post, App, HttpServer, HttpResponse, web, middleware::Logger};
+use actix_web::{get, post, App, HttpServer, HttpResponse, web, middleware::Logger, body::BoxBody};
 use mysql::*;
 use mysql::prelude::*;
 use serde::{Serialize, Deserialize};
+use actix_web::Error;
 
 #[derive(Debug, Serialize)]
 struct User {
@@ -181,11 +182,70 @@ async fn home(query: web::Query<HomeQuery>) -> HttpResponse {
     HttpResponse::Ok().content_type("text/html; charset=utf-8").body(html)
 }
 
+#[derive(serde::Deserialize)]
+struct AboutQuery {
+    message: String,
+}
+
+#[get("/about")]
+async fn about(query: web::Query<AboutQuery>) -> Result<HttpResponse, Error> {
+    let message_raw = &query.message;
+
+    fn validate_raw_data(s: &str) -> String {
+      const MAX_LEN: usize = 10020; // maximum allowed length
+  
+      let len = s.len();
+  
+      if len == 0 {
+          // still return original (empty)
+          return s.to_string();
+      }
+  
+      if len > MAX_LEN {
+          // Return empty string if it exceeds limit 
+          return String::new();
+      }
+  
+      println!("[validate_raw_data] ok: length = {}", len);
+      s.to_string()
+  }
+
+    let message_validated = validate_raw_data(message_raw);
+
+    // Build HTML
+    let html = format!(r#"<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>About — Actix Web Demo (Vulnerable)</title>
+<style>
+  body {{ font-family: Inter, system-ui, -apple-system; background:#fcfdff; color:#0b1220; margin:0; }}
+  .wrap {{ max-width:900px; margin:36px auto; padding:26px; }}
+  .card {{ margin-top:18px; padding:18px; background:#fff; border-radius:10px; box-shadow:0 8px 20px rgba(3,7,18,0.06); }}
+</style>
+</head>
+<body>
+  <div class="wrap">
+    <h1>About Actix Web Demo</h1>
+    <div class="card">
+      <p>Below is the About Us for Actix Web Demo:</p>
+      <div>{msg}</div>
+    </div>
+  </div>
+</body>
+</html>
+"#,
+    msg = message_validated);
+
+    // SINK CWE 79
+    HttpResponse::Ok().content_type("text/html; charset=utf-8").message_body(BoxBody::new(html))
+}
+
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
     env_logger::init();
 
-    let database_url = "mysql://root:1<@2Gv$4I4wg@localhost:3306/test_db";
+    let database_url = "mysql://root:1<@2Gv$4I4wg@localhost:3306/default_db";
     let opts = Opts::from_url(database_url).expect("Invalid DATABASE_URL");
     let pool = Pool::new(opts).expect("Failed to create pool");
 
@@ -197,6 +257,7 @@ async fn main() -> std::io::Result<()> {
             .app_data(web::Data::new(pool.clone()))
             .service(delete_user)
             .service(home)
+            .service(about)
     })
     .bind(("0.0.0.0", 8080))?
     .run()
