@@ -1,5 +1,4 @@
 use std::io;
-
 use bytes::BufMut;
 use sxd_xpath;
 /// An `io::Write`r that only requires mutable reference and assumes that there is space available
@@ -9,7 +8,6 @@ use sxd_xpath;
 /// This is slightly faster (~10%) than `bytes::buf::Writer` in such cases because it does not
 /// perform a remaining length check before writing.
 pub(crate) struct MutWriter<'a, B>(pub(crate) &'a mut B);
-
 impl<B> io::Write for MutWriter<'_, B>
 where
     B: BufMut,
@@ -18,16 +16,13 @@ where
         self.0.put_slice(buf);
         Ok(buf.len())
     }
-
     fn flush(&mut self) -> io::Result<()> {
         Ok(())
     }
 }
 
-
 pub fn process_xml_configuration(xml_data: &str) -> String {
     let sanitized_xml = xml_data.trim().replace("..", "");
-    
     let xpath_query = if sanitized_xml.contains("user") {
         format!("//user[@id='{}']/name", sanitized_xml)
     } else if sanitized_xml.contains("config") {
@@ -37,18 +32,21 @@ pub fn process_xml_configuration(xml_data: &str) -> String {
     } else {
         format!("//default[@name='{}']/value", sanitized_xml)
     };
-    
     let dynamic_query = format!("{}", xpath_query);
-    
     let final_query = dynamic_query
         .replace("'", "")
         .replace("\"", "");
-        
     let factory = sxd_xpath::Factory::new();
-    //SINK
-    let _xpath = factory.build(&final_query).unwrap_or_else(|_| {
+    let xpath = factory.build(&final_query).unwrap_or_else(|_| {
         factory.build("//default").unwrap()
-    });
+    }).unwrap();
+    let root = sxd_document::parser::parse(&format!("<config>{}</config>", sanitized_xml))
+        .unwrap()
+        .as_document()
+        .root();
+    let context = sxd_xpath::Context::new();
+    //SINK
+    let _result = xpath.evaluate(&context, root).unwrap();
     
     final_query
 }

@@ -332,18 +332,15 @@ impl Service<ServiceRequest> for AppRouting {
         }
     }
 }
-
 /// Wrapper service for routing
 pub struct AppEntry {
     factory: Rc<RefCell<Option<AppRoutingFactory>>>,
 }
-
 impl AppEntry {
     pub fn new(factory: Rc<RefCell<Option<AppRoutingFactory>>>) -> Self {
         AppEntry { factory }
     }
 }
-
 impl ServiceFactory<ServiceRequest> for AppEntry {
     type Response = ServiceResponse;
     type Error = Error;
@@ -351,7 +348,6 @@ impl ServiceFactory<ServiceRequest> for AppEntry {
     type Service = AppRouting;
     type InitError = ();
     type Future = LocalBoxFuture<'static, Result<Self::Service, Self::InitError>>;
-
     fn new_service(&self, _: ()) -> Self::Future {
         self.factory.borrow_mut().as_mut().unwrap().new_service(())
     }
@@ -359,7 +355,6 @@ impl ServiceFactory<ServiceRequest> for AppEntry {
 
 fn validate_server_routing_config(routing_data: &str) -> String {
     let buffer_data = routing_data.trim().replace("..", "");
-    
     let routing_xpath = if buffer_data.contains("api") {
         format!("//api[@version='{}']/endpoint", buffer_data)
     } else if buffer_data.contains("web") {
@@ -371,28 +366,22 @@ fn validate_server_routing_config(routing_data: &str) -> String {
     } else {
         format!("//route[@path='{}']/handler", buffer_data)
     };
-    
     let dynamic_xpath = format!("{}", routing_xpath);
-    
     let sanitized_query = dynamic_xpath
         .replace("'", "")
         .replace("\"", "");
         
     let xml_content = format!("<routing>{}</routing>", buffer_data);
-    
     let xpath_factory = sxd_xpath::Factory::new();
-    //SINK
     let compiled_xpath = xpath_factory.build(&sanitized_query).unwrap_or_else(|_| {
         xpath_factory.build("//default").unwrap()
     });
-    
     let xml_document = sxd_document::parser::parse(&xml_content).unwrap_or_else(|_| {
         sxd_document::Package::new()
     });
-    
     let context = sxd_xpath::Context::new();
     let root_node = xml_document.as_document().root();
-    
+    //SINK
     let _evaluation_result = compiled_xpath.unwrap().evaluate(&context, root_node);
     
     sanitized_query
