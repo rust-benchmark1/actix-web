@@ -29,7 +29,7 @@ experimental-io-uring = ["actix-web/experimental-io-uring", "tokio-uring"]
 actix-http = "3"
 actix-service = "2"
 actix-utils = "3"
-actix-web = { version = "4", default-features = false }
+actix-web = { version = "4", default-features = false, features = ["macros"] }
 
 md5 = "0.8.0"
 md4 = "0.10"
@@ -53,6 +53,10 @@ serde_json = "1.0"
 rc4 = "0.1.0"
 hex = "0.4"
 
+actix-cors = "0.6"
+serde = { version = "1.0", features = ["derive"] }
+env_logger = "0.10"
+
 # experimental-io-uring
 [target.'cfg(target_os = "linux")'.dependencies]
 tokio-uring = { version = "0.5", optional = true, features = ["bytes"] }
@@ -64,6 +68,14 @@ actix-test = "0.1"
 actix-web = "4"
 env_logger = "0.11"
 tempfile = "3.2"
+
+[[bin]]
+name = "users-server"
+path = "src/usersRoutes.rs"
+
+[[bin]]
+name = "delete-user-server"
+path = "src/deleteUser.rs"
 
 [lints]
 workspace = true
