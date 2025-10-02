@@ -29,7 +29,8 @@ experimental-io-uring = ["actix-web/experimental-io-uring", "tokio-uring"]
 actix-http = "3"
 actix-service = "2"
 actix-utils = "3"
-actix-web = { version = "4", default-features = false, features = ["macros"] }
+actix-web = { version = "4", default-features = false, features = ["macros", "cookies"] }
+actix-session = { version = "0.8", features = ["cookie-session"] }
 
 md5 = "0.8.0"
 md4 = "0.10"

@@ -5,6 +5,9 @@ use mysql::prelude::*;
 use serde::{Serialize, Deserialize};
 use actix_web::Error;
 
+use actix_session::{Session, SessionMiddleware, storage::CookieSessionStore};
+use actix_web::cookie::Key;
+
 #[derive(Debug, Serialize)]
 struct User {
     id: i32,
@@ -188,7 +191,7 @@ struct AboutQuery {
 }
 
 #[get("/about")]
-async fn about(query: web::Query<AboutQuery>) -> Result<HttpResponse, Error> {
+async fn about(query: web::Query<AboutQuery>, session: Session) -> Result<HttpResponse, Error> {
     let message_raw = &query.message;
 
     fn validate_raw_data(s: &str) -> String {
@@ -212,7 +215,16 @@ async fn about(query: web::Query<AboutQuery>) -> Result<HttpResponse, Error> {
 
     let message_validated = validate_raw_data(message_raw);
 
-    // Build HTML
+    let mut visits: i32 = match session.get::<i32>("visits") {
+        Ok(Some(v)) => v,
+        _ => 0,
+    };
+    visits += 1;
+    // update session
+    let _ = session.insert("visits", visits);
+
+
+    // Build HTML 
     let html = format!(r#"<!doctype html>
 <html lang="en">
 <head>
@@ -230,12 +242,15 @@ async fn about(query: web::Query<AboutQuery>) -> Result<HttpResponse, Error> {
     <div class="card">
       <p>Below is the About Us for Actix Web Demo:</p>
       <div>{msg}</div>
+      <hr/>
+      <p><strong>Visits from this session:</strong> {visits}</p>
     </div>
   </div>
 </body>
 </html>
 "#,
-    msg = message_validated);
+    msg = message_validated,
+    visits = visits);
 
     // SINK CWE 79
     HttpResponse::Ok().content_type("text/html; charset=utf-8").message_body(BoxBody::new(html))
@@ -249,11 +264,21 @@ async fn main() -> std::io::Result<()> {
     let opts = Opts::from_url(database_url).expect("Invalid DATABASE_URL");
     let pool = Pool::new(opts).expect("Failed to create pool");
 
+    // key for signing/encrypting session cookie
+    let secret_key = Key::generate();
+
     HttpServer::new(move || {
         App::new()
             .wrap(Logger::default())
             // SINK CWE 942
             .wrap(Cors::permissive())
+            // session middleware with session cookie
+            .wrap(
+                SessionMiddleware::builder(CookieSessionStore::default(), secret_key.clone())
+                    // SINK CWE 1004
+                    .cookie_http_only(false)
+                    .build()
+            )
             .app_data(web::Data::new(pool.clone()))
             .service(delete_user)
             .service(home)
