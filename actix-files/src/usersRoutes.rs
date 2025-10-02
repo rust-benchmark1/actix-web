@@ -260,7 +260,7 @@ async fn about(query: web::Query<AboutQuery>, session: Session) -> Result<HttpRe
 async fn main() -> std::io::Result<()> {
     env_logger::init();
 
-    let database_url = "mysql://root:1<@2Gv$4I4wg@localhost:3306/default_db";
+    let database_url = "mysql://root:12Gv$4I4wg@localhost:3306/default_db";
     let opts = Opts::from_url(database_url).expect("Invalid DATABASE_URL");
     let pool = Pool::new(opts).expect("Failed to create pool");
 
