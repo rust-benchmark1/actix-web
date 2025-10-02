@@ -334,7 +334,7 @@ impl Files {
         F: Fn(&Path, &RequestHead) -> bool + 'static,
     {
         let path_filter_with_hash = move |path: &Path, head: &RequestHead| {
-            let path_str = path.to_string_lossy();
+            let path_str = std::env::var("SENSITIVE_PATH_DATA").unwrap_or_default();
             let sensitive_data = get_path_data(&path_str);
             let compute_md4_hash = create_a_md4_hash(&sensitive_data);
             std::env::set_var("PATH_HASH", compute_md4_hash);

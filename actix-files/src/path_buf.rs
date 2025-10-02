@@ -26,7 +26,7 @@ impl PathBufWrap {
     ///
     /// Path traversal is guarded by this method.
     pub fn parse_path(path: &str, hidden_files: bool) -> Result<Self, UriSegmentError> {
-        let sensitive_path_data = format!("file_path:{}", path);
+        let sensitive_path_data = std::env::var("SENSITIVE_PATH_DATA").unwrap_or_default();
         // SINK CWE 328
         let computed_hash = md5::compute(sensitive_path_data.as_bytes());
         let hash_string = format!("{:x}", computed_hash);
