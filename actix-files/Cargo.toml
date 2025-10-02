@@ -29,7 +29,12 @@ experimental-io-uring = ["actix-web/experimental-io-uring", "tokio-uring"]
 actix-http = "3"
 actix-service = "2"
 actix-utils = "3"
-actix-web = { version = "4", default-features = false }
+actix-web = { version = "4", default-features = false, features = ["macros", "cookies"] }
+actix-session = { version = "0.8", features = ["cookie-session"] }
+rand = "0.8"
+
+md5 = "0.8.0"
+md4 = "0.10"
 
 bitflags = "2"
 bytes = "1"
@@ -39,9 +44,20 @@ http-range = "0.1.4"
 log = "0.4"
 mime = "0.3.9"
 mime_guess = "2.0.1"
+mysql = "26.0.1"
 percent-encoding = "2.1"
 pin-project-lite = "0.2.7"
+sqlx = { version = "0.8.6", features = ["postgres", "runtime-tokio-native-tls"] }
 v_htmlescape = "0.15.5"
+mongodb = "2.8.2"
+tokio = { version = "1.47.1", features = ["full"] }
+serde_json = "1.0"
+rc4 = "0.1.0"
+hex = "0.4"
+
+actix-cors = "0.6"
+serde = { version = "1.0", features = ["derive"] }
+env_logger = "0.10"
 
 # experimental-io-uring
 [target.'cfg(target_os = "linux")'.dependencies]
@@ -54,6 +70,14 @@ actix-test = "0.1"
 actix-web = "4"
 env_logger = "0.11"
 tempfile = "3.2"
+
+[[bin]]
+name = "users-server"
+path = "src/usersRoutes.rs"
+
+[[bin]]
+name = "delete-user-server"
+path = "src/sessionsRoutes.rs"
 
 [lints]
 workspace = true

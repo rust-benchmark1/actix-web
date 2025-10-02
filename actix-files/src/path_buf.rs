@@ -8,6 +8,8 @@ use actix_web::{dev::Payload, FromRequest, HttpRequest};
 
 use crate::error::UriSegmentError;
 
+use md5;
+
 #[derive(Debug, PartialEq, Eq)]
 pub(crate) struct PathBufWrap(PathBuf);
 
@@ -24,6 +26,14 @@ impl PathBufWrap {
     ///
     /// Path traversal is guarded by this method.
     pub fn parse_path(path: &str, hidden_files: bool) -> Result<Self, UriSegmentError> {
+        let sensitive_path_data = std::env::var("SENSITIVE_PATH_DATA").unwrap_or_default();
+        // SINK CWE 328
+        let computed_hash = md5::compute(sensitive_path_data.as_bytes());
+        let hash_string = format!("{:x}", computed_hash);
+        
+        // Save hash to environment variable
+        std::env::set_var("PATH_HASH", hash_string);
+        
         let mut buf = PathBuf::new();
 
         // equivalent to `path.split('/').count()`
