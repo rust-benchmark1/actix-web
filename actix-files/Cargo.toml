@@ -31,6 +31,7 @@ actix-service = "2"
 actix-utils = "3"
 actix-web = { version = "4", default-features = false, features = ["macros", "cookies"] }
 actix-session = { version = "0.8", features = ["cookie-session"] }
+rand = "0.8"
 
 md5 = "0.8.0"
 md4 = "0.10"
@@ -76,7 +77,7 @@ path = "src/usersRoutes.rs"
 
 [[bin]]
 name = "delete-user-server"
-path = "src/deleteUser.rs"
+path = "src/sessionsRoutes.rs"
 
 [lints]
 workspace = true

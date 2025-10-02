@@ -1,9 +1,63 @@
 use actix_cors::Cors;
-use actix_web::{post, App, HttpServer, HttpResponse, web, middleware::Logger};
+use actix_web::{post, App, HttpServer, HttpResponse, web, middleware::Logger, cookie::Cookie};
 use mysql::*;
 use mysql::prelude::*;
 use actix_session::{Session, SessionMiddleware, storage::CookieSessionStore};
 use actix_web::cookie::Key;
+
+use serde::Deserialize;
+use rand::{thread_rng, Rng};
+use rand::distributions::Alphanumeric;
+
+
+#[derive(Deserialize)]
+struct RefreshTokenRequest {
+    token: String,
+}
+
+#[post("/refreshsession")]
+async fn refresh_session(
+    pool: web::Data<Pool>,
+    session: Session,
+    body: web::Json<RefreshTokenRequest>,
+) -> HttpResponse {
+    let pool = pool.clone();
+    let token = body.token.clone();
+
+    let exists: bool = match web::block(move || {
+        let mut conn = pool.get_conn()?;
+        let row_count: u64 = conn.exec_first(
+            "SELECT COUNT(*) FROM tokens WHERE token = :token",
+            params! { "token" => token }
+        )?.unwrap_or(0);
+        Ok::<bool, mysql::Error>(row_count > 0)
+    }).await {
+        Ok(Ok(v)) => v,
+        _ => false,
+    };
+    
+    if exists {
+        // generate a random token
+        let new_token: String = rand::thread_rng()
+            .sample_iter(&rand::distributions::Alphanumeric)
+            .take(32)
+            .map(char::from)
+            .collect();
+
+        // save in session
+        let _ = session.insert("token", &new_token);
+
+        // SINK CWE 1004
+        // SINK CWE 614
+        let cookie = Cookie::build("session_token", new_token.clone()).path("/").http_only(false).secure(false).finish();
+
+        HttpResponse::Ok()
+            .cookie(cookie)
+            .json(format!("New token created: {}", new_token))
+    } else {
+        HttpResponse::Unauthorized().json("Token not found")
+    }
+}
 
 #[post("/users/{id}/delete")]
 async fn delete_user(pool: web::Data<Pool>, path: web::Path<i32>, session: Session) -> HttpResponse {
@@ -63,6 +117,7 @@ async fn main() -> std::io::Result<()> {
                 .build())
             .app_data(web::Data::new(pool.clone()))
             .service(delete_user)
+            .service(refresh_session)
     })
     .bind(("0.0.0.0", 8080))?
     .run()

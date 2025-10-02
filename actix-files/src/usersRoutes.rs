@@ -275,6 +275,8 @@ async fn main() -> std::io::Result<()> {
             // session middleware with session cookie
             .wrap(
                 SessionMiddleware::builder(CookieSessionStore::default(), secret_key.clone())
+                    // SINK CWE 614
+                    .cookie_secure(false)
                     // SINK CWE 1004
                     .cookie_http_only(false)
                     .build()
