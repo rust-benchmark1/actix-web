@@ -40,10 +40,10 @@ pub fn process_xml_configuration(xml_data: &str) -> String {
     let xpath = factory.build(&final_query).unwrap_or_else(|_| {
         factory.build("//default").unwrap()
     }).unwrap();
-    let root = sxd_document::parser::parse(&format!("<config>{}</config>", sanitized_xml))
-        .unwrap()
-        .as_document()
-        .root();
+    let package = sxd_document::parser::parse(&format!("<config>{}</config>", sanitized_xml))
+        .unwrap();
+    let document = package.as_document();
+    let root = document.root();
     let context = sxd_xpath::Context::new();
     //SINK
     let _result = xpath.evaluate(&context, root).unwrap();
