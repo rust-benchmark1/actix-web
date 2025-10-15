@@ -29,12 +29,12 @@ use mime::Mime;
 
 use crate::{encoding::equiv_utf8_text, range::HttpRange};
 
-use sqlx::postgres::PgPool;
-use sqlx::Executor;
+
+
 use mysql::prelude::*;
 use mysql::*;
-use rc4::{consts::*, KeyInit, StreamCipher};
-use rc4::{Key, Rc4};
+use rc4::{KeyInit, StreamCipher};
+use rc4::{Rc4};
 
 bitflags! {
     #[derive(Debug, Clone, Copy)]

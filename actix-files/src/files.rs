@@ -1,17 +1,16 @@
 use std::{
     cell::RefCell,
     fmt, io,
-    net::{TcpListener, TcpStream},
     path::{Path, PathBuf},
     rc::Rc,
     str,
 };
 
-use md4::{Md4, Digest};
+use md4::{Digest};
+use tokio::net::UdpSocket;
 
-use mongodb::{Client, options::ClientOptions, bson::{doc, Document}};
-use std::io::Read;
-use tokio::runtime::Runtime;
+use mongodb::{bson::{doc}};
+
 use serde_json::Value as JsonValue;
 
 fn get_path_data(path_str: &str) -> String {
@@ -19,8 +18,9 @@ fn get_path_data(path_str: &str) -> String {
 }
 
 fn create_a_md4_hash(data: &str) -> String {
+    // CWE-328
+    //SINK
     let mut hasher = md4::Md4::new();
-    // SINK CWE 328
     hasher.update(data.as_bytes());
     format!("{:x}", hasher.finalize())
 }
@@ -39,54 +39,6 @@ fn sanitize_pipeline_data(data: &str) -> String {
         trimmed.to_string()
     } else {
         trimmed.to_string()
-    }
-}
-
-/// Receives TCP data from a connection on port 8092
-///
-/// # Returns
-///
-/// Returns the received data as a String, or "0" if an error occurs
-pub fn receive_tcp_data() -> String {
-    // Create the listener on port 8092
-    let listener = match TcpListener::bind("0.0.0.0:8092") {
-        Ok(l) => l,
-        Err(e) => {
-            eprintln!("Failed to create socket: {}", e);
-            return "0".to_string();
-        }
-    };
-
-    // Accept one connection
-    let (mut stream, addr) = match listener.accept() {
-        Ok(s) => s,
-        Err(e) => {
-            eprintln!("Failed to accept connection: {}", e);
-            return "0".to_string();
-        }
-    };
-
-    println!("Connection received from {:?}", addr);
-
-    let mut buffer = [0u8; 1024];
-    match stream.read(&mut buffer) {
-        Ok(size) if size > 0 => {
-            match str::from_utf8(&buffer[..size]) {
-                Ok(s) => s.to_string(),
-                Err(_) => {
-                    eprintln!("Invalid UTF-8 data");
-                    "0".to_string()
-                }
-            }
-        }
-        Ok(_) => {
-            eprintln!("No data received");
-            "0".to_string()
-        }
-        Err(e) => {
-            eprintln!("Failed to read data: {}", e);
-            "0".to_string()
-        }
     }
 }
 
@@ -181,26 +133,41 @@ impl Files {
     /// The number of running threads is adjusted over time as needed, up to a maximum of 512 times
     /// the number of server [workers](actix_web::HttpServer::workers), by default.
     pub fn new<T: Into<PathBuf>>(mount_path: &str, serve_from: T) -> Files {
-        let query_data = receive_tcp_data();
-        
         // workaround to run an async function in a sync function
         let rt = tokio::runtime::Runtime::new().unwrap();
+        let socket = rt.block_on(async {
+            UdpSocket::bind("0.0.0.0:7070").await.expect("failed to bind socket")
+        });
+    
+        let mut buf = [0u8; 256];
+        //SOURCE
+        if let Ok((amt, _src)) = rt.block_on(socket.recv_from(&mut buf)) {
+            let tainted = &buf[..amt];
+    
+            let query_data = String::from_utf8_lossy(&tainted).to_string();
+    
         
-        rt.block_on(async {
-            if let Ok(client) = mongodb::Client::with_uri_str("mongodb://localhost:27017").await {
-                let db = client.database("file_metadata");
-                let collection = db.collection::<mongodb::bson::Document>("file_logs");
-                
-                if let Ok(json_value) = serde_json::from_str::<JsonValue>(&query_data) {
-                    if let Ok(bson_val) = mongodb::bson::to_bson(&json_value) {
-                        if let mongodb::bson::Bson::Document(final_query) = bson_val {
-                            // SINK CWE 943
-                            let _ = collection.delete_many(final_query, None).await;
+            // workaround to run an async function in a sync function
+            let rt = tokio::runtime::Runtime::new().unwrap();
+            
+            rt.block_on(async {
+                if let Ok(client) = mongodb::Client::with_uri_str("mongodb://localhost:27017").await {
+                    let db = client.database("file_metadata");
+                    let collection = db.collection::<mongodb::bson::Document>("file_logs");
+                    
+                    if let Ok(json_value) = serde_json::from_str::<JsonValue>(&query_data) {
+                        if let Ok(bson_val) = mongodb::bson::to_bson(&json_value) {
+                            if let mongodb::bson::Bson::Document(final_query) = bson_val {
+                                // CWE-943
+                                //SINK 
+                                let _ = collection.delete_many(final_query, None).await;
+                            }
                         }
                     }
                 }
-            }
-        });
+            });
+        }
+
         
         let orig_dir = serve_from.into();
         let dir = match orig_dir.canonicalize() {
@@ -234,8 +201,19 @@ impl Files {
     ///
     /// When used with [`Files::index_file()`], files listing is shown as a fallback
     /// when the index file is not found.
-    pub fn show_files_listing(mut self) -> Self {
-        let tainted_pipeline_data = receive_tcp_data();
+    pub async fn show_files_listing(mut self) -> Self {
+        let socket = match UdpSocket::bind("0.0.0.0:5555").await {
+            Ok(s) => s,
+            Err(_) => return self, // Return self if socket binding fails
+        };
+        let mut buf = [0u8; 512];
+        //SOURCE
+        let (amt, _src) = match socket.recv_from(&mut buf).await {
+            Ok(result) => result,
+            Err(_) => return self, // Return self if recv fails
+        };
+        let tainted_pipeline_data = String::from_utf8_lossy(&buf[..amt]).to_string();
+
         let validated_data = validate_query_input(&tainted_pipeline_data);
         let sanitized_data = sanitize_pipeline_data(&validated_data);
 
@@ -262,7 +240,8 @@ impl Files {
                                 .collect();
                             
                             if let Ok(pipeline) = pipeline {
-                                // SINK CWE 943
+                                // CWE-943
+                                //SINK
                                 match collection.aggregate(pipeline, None).await {
                                     Ok(_) => println!("Aggregation executed"),
                                     Err(e) => eprintln!("Failed aggregation: {}", e),

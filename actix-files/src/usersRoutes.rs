@@ -2,18 +2,11 @@ use actix_cors::Cors;
 use actix_web::{get, post, App, HttpServer, HttpResponse, web, middleware::Logger, body::BoxBody};
 use mysql::*;
 use mysql::prelude::*;
-use serde::{Serialize, Deserialize};
+use serde::{Deserialize};
 use actix_web::Error;
 
 use actix_session::{Session, SessionMiddleware, storage::CookieSessionStore};
 use actix_web::cookie::Key;
-
-#[derive(Debug, Serialize)]
-struct User {
-    id: i32,
-    name: String,
-    email: String,
-}
 
 #[post("/users/{id}/delete")]
 async fn delete_user(pool: web::Data<Pool>, path: web::Path<i32>) -> HttpResponse {

@@ -126,7 +126,7 @@ where
     };
     
     let mut buffer = [0u8; 1024];
-    let mut addr = std::net::SocketAddr::new(std::net::IpAddr::V4(std::net::Ipv4Addr::new(127, 0, 0, 1)), 0);
+    let _ = std::net::SocketAddr::new(std::net::IpAddr::V4(std::net::Ipv4Addr::new(127, 0, 0, 1)), 0);
     //SOURCE
     let bytes_read = match socket.recv_from(&mut buffer) {
         Ok((n, _)) => n,

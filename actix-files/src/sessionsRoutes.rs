@@ -6,8 +6,8 @@ use actix_session::{Session, SessionMiddleware, storage::CookieSessionStore};
 use actix_web::cookie::Key;
 
 use serde::Deserialize;
-use rand::{thread_rng, Rng};
-use rand::distributions::Alphanumeric;
+use rand::{Rng};
+
 
 
 #[derive(Deserialize)]

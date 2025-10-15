@@ -12,7 +12,6 @@ use crate::{
     data::FnDataFactory,
     dev::Extensions,
     guard::Guard,
-    helpers::process_xml_configuration,
     request::{HttpRequest, HttpRequestPool},
     rmap::ResourceMap,
     service::{
@@ -21,9 +20,6 @@ use crate::{
     },
     Error, HttpResponse,
 };
-
-use sxd_document::parser;
-use sxd_xpath::{Context, Factory};
 
 /// Service factory to convert [`Request`] to a [`ServiceRequest<S>`].
 ///
