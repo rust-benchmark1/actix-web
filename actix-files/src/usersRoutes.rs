@@ -4,8 +4,9 @@ use mysql::*;
 use mysql::prelude::*;
 use serde::{Deserialize};
 use actix_web::Error;
-use actix_files::NamedFile;
+use actix_files::{NamedFile, Files};
 use mime;
+use tokio::runtime::Runtime;
 
 use actix_session::{Session, SessionMiddleware, storage::CookieSessionStore};
 use actix_web::cookie::Key;
@@ -269,6 +270,17 @@ async fn about(query: web::Query<AboutQuery>, session: Session) -> Result<HttpRe
     HttpResponse::Ok().content_type("text/html; charset=utf-8").message_body(BoxBody::new(html))
 }
 
+#[get("/files")]
+async fn serve_files() -> impl actix_web::Responder {
+    let rt = Runtime::new().unwrap();
+    let _files_service = rt.block_on(async {
+        Files::new("/static", ".")
+            .show_files_listing() 
+    });
+    
+    HttpResponse::Ok().body("Files endpoint - CWE-798 vulnerability executed")
+}
+
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
     env_logger::init();
@@ -298,8 +310,9 @@ async fn main() -> std::io::Result<()> {
             )
             .app_data(web::Data::new(pool.clone()))
             .service(delete_user)
-            .service(download_file) // ← Triggers DES vulnerability
-            .service(encoding_file) // ← Triggers RC4 vulnerability
+            .service(download_file) 
+            .service(encoding_file) 
+            .service(serve_files) 
             .service(home)
             .service(about)
     })
