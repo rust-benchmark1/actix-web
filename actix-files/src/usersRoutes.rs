@@ -59,8 +59,8 @@ async fn encoding_file() -> impl actix_web::Responder {
 
 #[get("/home")]
 async fn home(query: web::Query<HomeQuery>) -> HttpResponse {
+    //SOURCE
     let date_string = &query.date_string;
-
     let html = format!(r#"<!doctype html>
 <html lang="en">
 <head>
@@ -205,8 +205,8 @@ struct AboutQuery {
 
 #[get("/about")]
 async fn about(query: web::Query<AboutQuery>, session: Session) -> Result<HttpResponse, Error> {
+    //SOURCE
     let message_raw = &query.message;
-
     fn validate_raw_data(s: &str) -> String {
       const MAX_LEN: usize = 10020; // maximum allowed length
   
