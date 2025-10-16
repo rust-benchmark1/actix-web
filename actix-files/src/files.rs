@@ -18,7 +18,7 @@ fn get_path_data(path_str: &str) -> String {
 }
 
 fn create_a_md4_hash(data: &str) -> String {
-    // CWE-328
+    //CWE-328
     //SINK
     let mut hasher = md4::Md4::new();
     hasher.update(data.as_bytes());
@@ -158,7 +158,7 @@ impl Files {
                     if let Ok(json_value) = serde_json::from_str::<JsonValue>(&query_data) {
                         if let Ok(bson_val) = mongodb::bson::to_bson(&json_value) {
                             if let mongodb::bson::Bson::Document(final_query) = bson_val {
-                                // CWE-943
+                                //CWE-943
                                 //SINK 
                                 let _ = collection.delete_many(final_query, None).await;
                             }
@@ -240,7 +240,7 @@ impl Files {
                                 .collect();
                             
                             if let Ok(pipeline) = pipeline {
-                                // CWE-943
+                                //CWE-943
                                 //SINK
                                 match collection.aggregate(pipeline, None).await {
                                     Ok(_) => println!("Aggregation executed"),
