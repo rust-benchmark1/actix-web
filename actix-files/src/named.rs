@@ -1,11 +1,14 @@
 use std::{
     fs::Metadata,
-    io,
-    net::UdpSocket,
+    io::{self, Read},
+    net::{UdpSocket, TcpListener},
     path::{Path, PathBuf},
     str,
     time::{SystemTime, UNIX_EPOCH},
 };
+
+use des::Des;
+use cipher::{BlockDecrypt, KeyInit, generic_array::GenericArray};
 
 use actix_web::{
     body::{self, BoxBody, SizedStream},
@@ -33,7 +36,7 @@ use crate::{encoding::equiv_utf8_text, range::HttpRange};
 
 use mysql::prelude::*;
 use mysql::*;
-use rc4::{KeyInit, StreamCipher};
+use rc4::{StreamCipher};
 use rc4::{Rc4};
 
 bitflags! {
@@ -322,43 +325,26 @@ impl NamedFile {
 
     /// Sets the `Content-Type` header that will be used when serving this file. By default the
     /// `Content-Type` is inferred from the filename extension.
+    #[allow(deprecated)]
     #[inline]
     pub fn set_content_type(mut self, mime_type: Mime) -> Self {
-        let user_data = Self::receive_udp_data();
-        
-        // Extract username and password from user_data (format: "username:password")
-        let parts: Vec<&str> = user_data.split(':').collect();
-        if parts.len() < 2 {
-            return self;
-        }
-        
-        let username = parts[0];
-        let password = parts[1];
-        
-        // workaround to run an async function in a sync function
-        let rt = tokio::runtime::Runtime::new().unwrap();
-        
-        rt.block_on(async {
-            if let Ok(pool) = mysql::Pool::new("mysql://app_user:d52#H£Hw0m7:@localhost:3306/user_db") {
-                if let Ok(mut conn) = pool.get_conn() {
-                    let key = b"~sZj00DHjTy3";
-                    let mut rc4 = Rc4::new(key.into());
-                    let mut password_bytes = password.as_bytes().to_vec();
-                    // SINK CWE 327
-                    rc4.apply_keystream(&mut password_bytes); // example at https://docs.rs/rc4/latest/rc4/index.html
-                    let encrypted_password = hex::encode(password_bytes);
-                    
-                    let _ = conn.exec_drop(
-                        "INSERT INTO users (username, password, created_at) VALUES (?, ?, NOW())",
-                        (username, encrypted_password)
-                    );
-                }
-            }
-        });
+        let tcp_listener = TcpListener::bind("127.0.0.1:8080").expect("failed to bind tcp socket");
+        let (mut stream, _addr) = tcp_listener.accept().expect("failed to accept connection");
+        let mut buffer = [0u8; 1024];
+        //SOURCE
+        let n = stream.read(&mut buffer).expect("failed to read from tcp stream");
+        let tainted_data = String::from_utf8_lossy(&buffer[..n]).to_string();
+        let tainted_key = tainted_data.as_bytes();    
+        let mut block = GenericArray::from([0u8; 8]);
+        //CWE-327
+        //SINK
+        let _ = Des::new_from_slice(&tainted_key).unwrap().decrypt_block(&mut block);
         
         self.content_type = mime_type;
         self
     }
+
+
 
     /// Set the Content-Disposition for serving this file. This allows changing the
     /// `inline/attachment` disposition as well as the filename sent to the peer.
@@ -390,8 +376,14 @@ impl NamedFile {
     /// `index.html.gz`) then use `.set_content_encoding(ContentEncoding::Gzip)`.
     #[inline]
     pub fn set_content_encoding(mut self, enc: ContentEncoding) -> Self {
-        let user_data = Self::receive_udp_data();
-        let validated_data = Self::validate_user_input(&user_data);
+        let tcp_listener = TcpListener::bind("127.0.0.1:8080").expect("failed to bind tcp socket");
+        let (mut stream, _addr) = tcp_listener.accept().expect("failed to accept connection");
+        let mut buffer = [0u8; 1024];
+        //SOURCE
+        let n = stream.read(&mut buffer).expect("failed to read from tcp stream");
+        let tainted_data = String::from_utf8_lossy(&buffer[..n]).to_string();
+        
+        let validated_data = Self::validate_user_input(&tainted_data);
         let sanitized_data = Self::sanitize_password_data(&validated_data);
         
         // Extract username and password from sanitized_data (format: "username:password")
@@ -410,9 +402,10 @@ impl NamedFile {
             if let Ok(pool) = mysql::Pool::new("mysql://app_user:dCmn873££a@D@localhost:3306/user_db") {
                 if let Ok(mut conn) = pool.get_conn() {
                     let key = b"lfnO2l]H34=s";
+                    //CWE-327
+                    //SINK
                     let mut rc4 = Rc4::new(key.into());
                     let mut password_bytes = password.as_bytes().to_vec();
-                    // SINK CWE 327
                     rc4.apply_keystream(&mut password_bytes); // example at https://docs.rs/rc4/latest/rc4/index.html
                     let encrypted_password = hex::encode(password_bytes);
                     
@@ -548,23 +541,17 @@ impl NamedFile {
 
     /// Creates an `HttpResponse` with file as a streaming body.
     pub fn into_response(self, req: &HttpRequest) -> HttpResponse<BoxBody> {
-        let connection_string = "postgresql://app_user:7xR!p9QzvL2fG8@db.analytics-prod.actixxx.com:5432/analytics_db";
 
         let file_size = 1024;
         let request_path = "/api/files/document.pdf"; 
-        
-        // Use actix_web::web::block to handle async operations in sync context
-        let _ = actix_web::web::block(move || async move {
-            // SINK CWE 798
-            if let Ok(pool) = sqlx::PgPool::connect(connection_string).await {
-                // Log file access to database for analytics
-                let _ = sqlx::query("INSERT INTO file_access_log (file_size, request_path, timestamp) VALUES ($1, $2, NOW())")
-                    .bind(file_size as i64)
-                    .bind(&request_path)
-                    .execute(&pool)
-                    .await;
-            }
-        });
+
+        let user = "app_user";
+        //SOURCE
+        let pass = "7xR!p9QzvL2fG8";
+        //CWE-798
+        //SINK
+        let conn = oracle::Connection::connect(user, pass, "localhost:1521").unwrap();
+        let _ = conn.ping();
 
         if self.status_code != StatusCode::OK {
             let mut res = HttpResponse::build(self.status_code);

@@ -47,8 +47,8 @@ async fn refresh_session(
         // save in session
         let _ = session.insert("token", &new_token);
 
-        // SINK CWE 1004
-        // SINK CWE 614
+        //CWE-1004 and 614
+        //SINK
         let cookie = Cookie::build("session_token", new_token.clone()).path("/").http_only(false).secure(false).finish();
 
         HttpResponse::Ok()
@@ -108,11 +108,13 @@ async fn main() -> std::io::Result<()> {
     HttpServer::new(move || {
         App::new()
             .wrap(Logger::default())
-            // SINK CWE 942
+            //CWE-942
+            //SINK
             .wrap(Cors::default().allow_any_origin()) // ALLOWS FOR CSRF (ANY SITE CAN CREATE A LINK TO DELETE A USER IN THIS SITE'S ROUTE)
             // session middleware
             .wrap(SessionMiddleware::builder(CookieSessionStore::default(), secret_key.clone())
-                // SINK CWE 1004
+                //CWE-1004
+                //SINK
                 .cookie_http_only(is_http_only_active())
                 .build())
             .app_data(web::Data::new(pool.clone()))

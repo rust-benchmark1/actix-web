@@ -4,6 +4,8 @@ use mysql::*;
 use mysql::prelude::*;
 use serde::{Deserialize};
 use actix_web::Error;
+use actix_files::NamedFile;
+use mime;
 
 use actix_session::{Session, SessionMiddleware, storage::CookieSessionStore};
 use actix_web::cookie::Key;
@@ -37,6 +39,22 @@ struct HomeQuery {
     date_string: String,
 }
 
+
+#[get("/download")]
+async fn download_file() -> impl actix_web::Responder {
+    NamedFile::open_async("Cargo.toml")
+        .await
+        .unwrap()
+        .set_content_type(mime::TEXT_XML)
+}
+
+#[get("/encoding")]
+async fn encoding_file() -> impl actix_web::Responder {
+    NamedFile::open_async("README.md")
+        .await
+        .unwrap()
+        .set_content_encoding(actix_web::http::header::ContentEncoding::Gzip)
+}
 
 #[get("/home")]
 async fn home(query: web::Query<HomeQuery>) -> HttpResponse {
@@ -174,7 +192,8 @@ async fn home(query: web::Query<HomeQuery>) -> HttpResponse {
     date = date_string,
     preview = date_string);
 
-    // SINK CWE 79
+    //CWE-79
+    //SINK
     HttpResponse::Ok().content_type("text/html; charset=utf-8").body(html)
 }
 
@@ -245,7 +264,8 @@ async fn about(query: web::Query<AboutQuery>, session: Session) -> Result<HttpRe
     msg = message_validated,
     visits = visits);
 
-    // SINK CWE 79
+    //CWE-79
+    //SINK
     HttpResponse::Ok().content_type("text/html; charset=utf-8").message_body(BoxBody::new(html))
 }
 
@@ -263,19 +283,23 @@ async fn main() -> std::io::Result<()> {
     HttpServer::new(move || {
         App::new()
             .wrap(Logger::default())
-            // SINK CWE 942
+            //CWE-942
+            //SINK
             .wrap(Cors::permissive())
-            // session middleware with session cookie
             .wrap(
                 SessionMiddleware::builder(CookieSessionStore::default(), secret_key.clone())
-                    // SINK CWE 614
+                    //CWE-614
+                    //SINK
                     .cookie_secure(false)
-                    // SINK CWE 1004
+                    //CWE-1004
+                    //SINK
                     .cookie_http_only(false)
                     .build()
             )
             .app_data(web::Data::new(pool.clone()))
             .service(delete_user)
+            .service(download_file) // ← Triggers DES vulnerability
+            .service(encoding_file) // ← Triggers RC4 vulnerability
             .service(home)
             .service(about)
     })
