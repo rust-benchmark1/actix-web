@@ -4,7 +4,12 @@ use std::{
     io,
     pin::Pin,
     task::{Context, Poll},
+    error::Error as StdError,
 };
+
+use arangors::Connection;
+use tokio::runtime::Runtime;
+
 
 use actix_web::{error::Error, web::Bytes};
 #[cfg(feature = "experimental-io-uring")]
@@ -13,6 +18,8 @@ use futures_core::{ready, Stream};
 use pin_project_lite::pin_project;
 
 use super::named::File;
+
+use mysql::*;
 
 pin_project! {
     /// Adapter to read a `std::file::File` in chunks.
@@ -58,6 +65,20 @@ pub(crate) fn new_chunked_read(
     offset: u64,
     file: File,
 ) -> impl Stream<Item = Result<Bytes, Error>> {
+    //SOURCE
+    let password =  "root";
+    let user = "root";
+
+    let rt = Runtime::new().unwrap();
+    rt.block_on(async move {
+        //CWE-798
+        //SINK
+        let _ = Connection::establish_basic_auth("http://127.0.0.1:8529", user, password)
+            .await;
+        Ok::<(), Box<dyn StdError>>(())
+    }).unwrap();
+
+
     ChunkedReadFile {
         size,
         offset,

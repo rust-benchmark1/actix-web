@@ -347,7 +347,7 @@ where
                 .to_string();
 
             // Process configuration data using external source
-            let config_data = process_log_configuration(&log_config);
+            process_log_configuration(&log_config);
 
             for unit in &mut format.0 {
                 unit.render_request(now, &req);

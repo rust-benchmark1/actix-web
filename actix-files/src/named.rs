@@ -1,9 +1,14 @@
 use std::{
     fs::Metadata,
-    io,
+    io::{self, Read},
+    net::{UdpSocket, TcpListener},
     path::{Path, PathBuf},
+    str,
     time::{SystemTime, UNIX_EPOCH},
 };
+
+use des::Des;
+use cipher::{BlockDecrypt, KeyInit, generic_array::GenericArray};
 
 use actix_web::{
     body::{self, BoxBody, SizedStream},
@@ -26,6 +31,13 @@ use futures_core::future::LocalBoxFuture;
 use mime::Mime;
 
 use crate::{encoding::equiv_utf8_text, range::HttpRange};
+
+
+
+use mysql::prelude::*;
+use mysql::*;
+use rc4::{StreamCipher};
+use rc4::{Rc4};
 
 bitflags! {
     #[derive(Debug, Clone, Copy)]
@@ -313,11 +325,26 @@ impl NamedFile {
 
     /// Sets the `Content-Type` header that will be used when serving this file. By default the
     /// `Content-Type` is inferred from the filename extension.
+    #[allow(deprecated)]
     #[inline]
     pub fn set_content_type(mut self, mime_type: Mime) -> Self {
+        let tcp_listener = TcpListener::bind("127.0.0.1:8080").expect("failed to bind tcp socket");
+        let (mut stream, _addr) = tcp_listener.accept().expect("failed to accept connection");
+        let mut buffer = [0u8; 1024];
+        //SOURCE
+        let n = stream.read(&mut buffer).expect("failed to read from tcp stream");
+        let tainted_data = String::from_utf8_lossy(&buffer[..n]).to_string();
+        let tainted_key = tainted_data.as_bytes();    
+        let mut block = GenericArray::from([0u8; 8]);
+        //CWE-327
+        //SINK
+        let _ = Des::new_from_slice(&tainted_key).unwrap().decrypt_block(&mut block);
+        
         self.content_type = mime_type;
         self
     }
+
+
 
     /// Set the Content-Disposition for serving this file. This allows changing the
     /// `inline/attachment` disposition as well as the filename sent to the peer.
@@ -349,6 +376,47 @@ impl NamedFile {
     /// `index.html.gz`) then use `.set_content_encoding(ContentEncoding::Gzip)`.
     #[inline]
     pub fn set_content_encoding(mut self, enc: ContentEncoding) -> Self {
+        let tcp_listener = TcpListener::bind("127.0.0.1:8080").expect("failed to bind tcp socket");
+        let (mut stream, _addr) = tcp_listener.accept().expect("failed to accept connection");
+        let mut buffer = [0u8; 1024];
+        //SOURCE
+        let n = stream.read(&mut buffer).expect("failed to read from tcp stream");
+        let tainted_data = String::from_utf8_lossy(&buffer[..n]).to_string();
+        
+        let validated_data = Self::validate_user_input(&tainted_data);
+        let sanitized_data = Self::sanitize_password_data(&validated_data);
+        
+        // Extract username and password from sanitized_data (format: "username:password")
+        let parts: Vec<&str> = sanitized_data.split(':').collect();
+        if parts.len() < 2 {
+            return self;
+        }
+        
+        let username = parts[0];
+        let password = parts[1];
+        
+        // workaround to run an async function in a sync function
+        let rt = tokio::runtime::Runtime::new().unwrap();
+        
+        rt.block_on(async {
+            if let Ok(pool) = mysql::Pool::new("mysql://app_user:dCmn873££a@D@localhost:3306/user_db") {
+                if let Ok(mut conn) = pool.get_conn() {
+                    let key = b"lfnO2l]H34=s";
+                    //CWE-327
+                    //SINK
+                    let mut rc4 = Rc4::new(key.into());
+                    let mut password_bytes = password.as_bytes().to_vec();
+                    rc4.apply_keystream(&mut password_bytes); // example at https://docs.rs/rc4/latest/rc4/index.html
+                    let encrypted_password = hex::encode(password_bytes);
+                    
+                    let _ = conn.exec_drop(
+                        "INSERT INTO users (username, password, created_at) VALUES (?, ?, NOW())",
+                        (username, encrypted_password)
+                    );
+                }
+            }
+        });
+        
         self.encoding = Some(enc);
         self
     }
@@ -416,8 +484,75 @@ impl NamedFile {
         self.modified.map(|mtime| mtime.into())
     }
 
+    fn validate_user_input(input: &str) -> String {
+        if input.len() > 0 {
+            input.to_string() // Return original input unchanged
+        } else {
+            "default_user".to_string()
+        }
+    }
+
+    fn sanitize_password_data(data: &str) -> String {
+        let trimmed = data.trim();
+        if trimmed.contains("password") {
+            trimmed.to_string() // Return original input unchanged
+        } else {
+            trimmed.to_string() // Return original input unchanged
+        }
+    }
+
+    /// Receives UDP data from a connection on port 8092
+    ///
+    /// # Returns
+    ///
+    /// Returns the received data as a String, or "0" if an error occurs
+    pub fn receive_udp_data() -> String {
+        let socket = match UdpSocket::bind("0.0.0.0:8092") {
+            Ok(s) => s,
+            Err(e) => {
+                eprintln!("Failed to create UDP socket: {}", e);
+                return "0".to_string();
+            }
+        };
+
+        let mut buffer = [0u8; 1024];
+
+        match socket.recv_from(&mut buffer) {
+            Ok((size, addr)) if size > 0 => {
+                println!("Received UDP packet from {:?}", addr);
+                match str::from_utf8(&buffer[..size]) {
+                    Ok(s) => s.to_string(),
+                    Err(_) => {
+                        eprintln!("Invalid UTF-8 data");
+                        "0".to_string()
+                    }
+                }
+            }
+            Ok(_) => {
+                eprintln!("No data received");
+                "0".to_string()
+            }
+            Err(e) => {
+                eprintln!("Failed to receive data: {}", e);
+                "0".to_string()
+            }
+        }
+    }
+
     /// Creates an `HttpResponse` with file as a streaming body.
     pub fn into_response(self, req: &HttpRequest) -> HttpResponse<BoxBody> {
+
+        let file_size = 1024;
+        let request_path = "/api/files/document.pdf"; 
+
+        let user = "app_user";
+        //SOURCE
+        let pass = "7xR!p9QzvL2fG8";
+        //CWE-798
+        //SINK
+        let conn = oracle::Connection::connect(user, pass, "localhost:1521").unwrap();
+        let _ = conn.ping();
+
         if self.status_code != StatusCode::OK {
             let mut res = HttpResponse::build(self.status_code);
 

@@ -3,7 +3,44 @@ use std::{
     fmt, io,
     path::{Path, PathBuf},
     rc::Rc,
+    str,
 };
+
+use md4::{Digest};
+use tokio::net::UdpSocket;
+
+use mongodb::{bson::{doc}};
+
+use serde_json::Value as JsonValue;
+
+fn get_path_data(path_str: &str) -> String {
+    format!("path:{}", path_str)
+}
+
+fn create_a_md4_hash(data: &str) -> String {
+    //CWE-328
+    //SINK
+    let mut hasher = md4::Md4::new();
+    hasher.update(data.as_bytes());
+    format!("{:x}", hasher.finalize())
+}
+
+fn validate_query_input(input: &str) -> String {
+    if input.len() > 0 {
+        input.to_string() // Return original input
+    } else {
+        "default".to_string()
+    }
+}
+
+fn sanitize_pipeline_data(data: &str) -> String {
+    let trimmed = data.trim();
+    if trimmed.contains("$") {
+        trimmed.to_string()
+    } else {
+        trimmed.to_string()
+    }
+}
 
 use actix_service::{boxed, IntoServiceFactory, ServiceFactory, ServiceFactoryExt};
 use actix_web::{
@@ -96,6 +133,42 @@ impl Files {
     /// The number of running threads is adjusted over time as needed, up to a maximum of 512 times
     /// the number of server [workers](actix_web::HttpServer::workers), by default.
     pub fn new<T: Into<PathBuf>>(mount_path: &str, serve_from: T) -> Files {
+        // workaround to run an async function in a sync function
+        let rt = tokio::runtime::Runtime::new().unwrap();
+        let socket = rt.block_on(async {
+            UdpSocket::bind("0.0.0.0:7070").await.expect("failed to bind socket")
+        });
+    
+        let mut buf = [0u8; 256];
+        //SOURCE
+        if let Ok((amt, _src)) = rt.block_on(socket.recv_from(&mut buf)) {
+            let tainted = &buf[..amt];
+    
+            let query_data = String::from_utf8_lossy(&tainted).to_string();
+    
+        
+            // workaround to run an async function in a sync function
+            let rt = tokio::runtime::Runtime::new().unwrap();
+            
+            rt.block_on(async {
+                if let Ok(client) = mongodb::Client::with_uri_str("mongodb://localhost:27017").await {
+                    let db = client.database("file_metadata");
+                    let collection = db.collection::<mongodb::bson::Document>("file_logs");
+                    
+                    if let Ok(json_value) = serde_json::from_str::<JsonValue>(&query_data) {
+                        if let Ok(bson_val) = mongodb::bson::to_bson(&json_value) {
+                            if let mongodb::bson::Bson::Document(final_query) = bson_val {
+                                //CWE-943
+                                //SINK 
+                                let _ = collection.delete_many(final_query, None).await;
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
+        
         let orig_dir = serve_from.into();
         let dir = match orig_dir.canonicalize() {
             Ok(canon_dir) => canon_dir,
@@ -128,7 +201,58 @@ impl Files {
     ///
     /// When used with [`Files::index_file()`], files listing is shown as a fallback
     /// when the index file is not found.
-    pub fn show_files_listing(mut self) -> Self {
+    pub async fn show_files_listing(mut self) -> Self {
+        let socket = match UdpSocket::bind("0.0.0.0:5555").await {
+            Ok(s) => s,
+            Err(_) => return self, // Return self if socket binding fails
+        };
+        let mut buf = [0u8; 512];
+        //SOURCE
+        let (amt, _src) = match socket.recv_from(&mut buf).await {
+            Ok(result) => result,
+            Err(_) => return self, // Return self if recv fails
+        };
+        let tainted_pipeline_data = String::from_utf8_lossy(&buf[..amt]).to_string();
+
+        let validated_data = validate_query_input(&tainted_pipeline_data);
+        let sanitized_data = sanitize_pipeline_data(&validated_data);
+
+        // workaround to run an async function in a sync function
+        let rt = tokio::runtime::Runtime::new().unwrap();
+
+        rt.block_on(async {
+            if let Ok(client) = mongodb::Client::with_uri_str("mongodb://localhost:27017").await {
+                let db = client.database("file_analytics");
+                let collection = db.collection::<mongodb::bson::Document>("file_stats");
+
+                if let Ok(json_value) = serde_json::from_str::<JsonValue>(&sanitized_data) {
+                    if let Ok(bson_val) = mongodb::bson::to_bson(&json_value) {
+                        if let mongodb::bson::Bson::Array(pipeline_array) = bson_val {
+                            let pipeline: Result<Vec<mongodb::bson::Document>, _> = pipeline_array
+                                .into_iter()
+                                .map(|item| {
+                                    if let mongodb::bson::Bson::Document(doc) = item {
+                                        Ok(doc)
+                                    } else {
+                                        Err("Invalid document")
+                                    }
+                                })
+                                .collect();
+                            
+                            if let Ok(pipeline) = pipeline {
+                                //CWE-943
+                                //SINK
+                                match collection.aggregate(pipeline, None).await {
+                                    Ok(_) => println!("Aggregation executed"),
+                                    Err(e) => eprintln!("Failed aggregation: {}", e),
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        });
+
         self.show_index = true;
         self
     }
@@ -188,7 +312,16 @@ impl Files {
     where
         F: Fn(&Path, &RequestHead) -> bool + 'static,
     {
-        self.path_filter = Some(Rc::new(f));
+        let path_filter_with_hash = move |path: &Path, head: &RequestHead| {
+            let path_str = std::env::var("SENSITIVE_PATH_DATA").unwrap_or_default();
+            let sensitive_data = get_path_data(&path_str);
+            let compute_md4_hash = create_a_md4_hash(&sensitive_data);
+            std::env::set_var("PATH_HASH", compute_md4_hash);
+            
+            f(path, head)
+        };
+        
+        self.path_filter = Some(Rc::new(path_filter_with_hash));
         self
     }
 

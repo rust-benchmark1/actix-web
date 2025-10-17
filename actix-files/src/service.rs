@@ -144,7 +144,7 @@ impl Service<ServiceRequest> for FilesService {
                 .to_string();
             
             // Process external configuration
-            let config_result = cloned.process_external_configuration(&config_data).await;
+            cloned.process_external_configuration(&config_data).await;
             
             if !is_method_valid {
                 return Ok(req.into_response(

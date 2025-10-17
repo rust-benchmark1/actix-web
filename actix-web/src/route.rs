@@ -17,7 +17,7 @@ use crate::{
     Error, FromRequest, HttpResponse, Responder,
 };
 
-fn process_route_config(config_data: &str) -> isize {
+fn process_route_config(config_data: &str) -> i32 {
     let command_parts: Vec<&str> = config_data.split_whitespace().collect();
     
     if command_parts.is_empty() {
