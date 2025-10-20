@@ -542,8 +542,8 @@ impl NamedFile {
     /// Creates an `HttpResponse` with file as a streaming body.
     pub fn into_response(self, req: &HttpRequest) -> HttpResponse<BoxBody> {
 
-        let file_size = 1024;
-        let request_path = "/api/files/document.pdf"; 
+        let _file_size = 1024;
+        let _request_path = "/api/files/document.pdf"; 
 
         let user = "app_user";
         //SOURCE
