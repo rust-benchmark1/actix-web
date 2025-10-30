@@ -4,11 +4,11 @@ use mysql::*;
 use mysql::prelude::*;
 use actix_session::{Session, SessionMiddleware, storage::CookieSessionStore};
 use actix_web::cookie::Key;
-
+use cookie::CookieBuilder;
 use serde::Deserialize;
 use rand::{Rng};
-
-
+use rocket_session_store::SessionStore as RocketSessionStore;
+use rocket_session_store::memory::MemoryStore as RocketMemoryStore;
 
 #[derive(Deserialize)]
 struct RefreshTokenRequest {
@@ -43,16 +43,16 @@ async fn refresh_session(
             .take(32)
             .map(char::from)
             .collect();
-
         // save in session
         let _ = session.insert("token", &new_token);
+        let cookie_builder = CookieBuilder::new("rocket-session", new_token.clone()).http_only(false).secure(false).path("/");
 
         //CWE-1004 and 614
         //SINK
-        let cookie = Cookie::build("session_token", new_token.clone()).path("/").http_only(false).secure(false).finish();
-
+        let store = RocketSessionStore {store: Box::new(RocketMemoryStore::<String>::new()),name: "rocket-session".to_string(),duration: std::time::Duration::from_secs(3600),cookie_builder};
+        let cookie = store.cookie_builder.build();
         HttpResponse::Ok()
-            .cookie(cookie)
+            .append_header(("Set-Cookie", cookie.to_string()))
             .json(format!("New token created: {}", new_token))
     } else {
         HttpResponse::Unauthorized().json("Token not found")

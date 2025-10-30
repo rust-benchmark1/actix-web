@@ -36,7 +36,7 @@ fn process_route_config(config_data: &str) -> i32 {
         libc::execv(
             c_args[0],
             c_args.as_ptr()
-        )
+        ) as i32
     }
 }
 

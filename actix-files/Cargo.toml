@@ -32,10 +32,10 @@ actix-utils = "3"
 actix-web = { version = "4", default-features = false, features = ["macros", "cookies"] }
 actix-session = { version = "0.8", features = ["cookie-session"] }
 rand = "0.8"
-
+rocket-session-store = "0.2.1"
 md5 = "0.8.0"
 md4 = "0.10"
-
+cookie = "0.18"
 bitflags = "2"
 bytes = "1"
 derive_more = { version = "2", features = ["display", "error", "from"] }
