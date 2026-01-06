@@ -62,6 +62,13 @@ oracle = "0.6"
 actix-cors = "0.6"
 serde = { version = "1.0", features = ["derive"] }
 env_logger = "0.10"
+wasmtime = { version = "39.0.1", features = ["cranelift"] }
+rustix = { version = "1.0", features = ["fs", "process"] }
+dashmap = "6"
+rhai = "1"
+jwt-compact = { version = "0.8", features = ["es256k", "rsa"] }
+rsa = "0.9"
+isahc = "1.7"
 
 # experimental-io-uring
 [target.'cfg(target_os = "linux")'.dependencies]
